@@ -322,7 +322,8 @@ class Runtime64Monitor(safety.Monitor):
         if warning and not self.gpu_warning_active:
             text="整卡空闲显存不足1GiB，仅提示；仍保留256MiB持续10秒、RAM/提交内存/工作集保护，不擅自关闭其他应用。"
             safety.write(self.out/"显存余量提示.json",{"utc":time.time(),"level":"warning","cancel":False,"gpu_free_mib":round(free/1024**2,1),"notice":text})
-            print(text,flush=True)
+            if not getattr(self, "quiet", False):
+                print(text,flush=True)
         elif not warning and self.gpu_warning_active:
             safety.write(self.out/"显存余量提示.json",{"utc":time.time(),"level":"cleared","cancel":False,"gpu_free_mib":round(free/1024**2,1)})
         self.gpu_warning_active=warning

@@ -273,11 +273,21 @@ def main(argv=None):
     sub=parser.add_subparsers(dest='command',required=True)
     ui=sub.add_parser('ui');ui.add_argument('--target');ui.add_argument('--dry-run',action='store_true')
     ui.add_argument('--context',choices=('32','64'),help='仅本次启动的上下文档位；不改持久配置')
+    ui.add_argument('--native',action='store_true',help='显式试用原生V2 TUI；尚未替换默认入口')
+    ui.add_argument('--cli',help='仅原生预览：已核验的独立2.3.0 CLI路径')
     status=sub.add_parser('check');status.add_argument('--json',action='store_true');status.add_argument('--menu',action='store_true');status.add_argument('--stop',action='store_true')
     sub.add_parser('stop')
     args=parser.parse_args(argv)
     if args.command=='stop' or args.command=='check' and args.stop:return stop_owned()
     if args.command=='check':return check(args.json,args.menu)
+    if args.native:
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('ctf_native_launch',OPEN_CODE/'v2/launch.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        return module.main((["--target",args.target] if args.target else [])+
+            (["--context",args.context] if args.context else [])+(["--cli",args.cli] if args.cli else [])+
+            (["--dry-run"] if args.dry_run else []))
+    if args.cli:raise ValueError('--cli仅用于显式--native预览，不影响原入口')
     target=args.target or input('请输入/拖入独立题目副本目录（回车取消，不加载模型）：').strip().strip('"')
     if not target:return 0
     if args.context is None and not args.dry_run and sys.stdin.isatty():

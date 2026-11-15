@@ -1,5 +1,6 @@
 // V2 TUI 插件：覆盖原生命令的策略，不向模型增加工具 schema 或提示词。
 import { policy, archive } from "./session-policy.mjs";
+import { center } from "./ctf-center.mjs";
 
 export default {
   id: "ctfcode.tui",
@@ -11,6 +12,7 @@ export default {
       const route = ctx.ui.router.current();
       if (route.type === "session") await archive(ctx.client, route.sessionID);
     };
+    const menu = center(ctx, ctx.options, state, flush);
     let timer;
     const unwatch = ctx.data.listen(({ details }) => {
       const route = ctx.ui.router.current();
@@ -29,6 +31,15 @@ export default {
       id: "session.cd", title: "切换题目目录（归档并新开会话）", palette: true,
       slash: { name: "cd", arguments: true }, run: enter,
     }, {
+      id: "session.new", title: "归档并新开空白会话", palette: true, slash: { name: "new" }, run: async () => {
+        const route = ctx.ui.router.current();
+        const info = route.type === "session" ? await ctx.client.session.get({ sessionID: route.sessionID }) : undefined;
+        await enter(info?.location?.directory);
+      },
+    }, {
+      id: "ctfcode.center", title: "CTFCode · 模型、上下文与资源自检", palette: true,
+      slash: { name: "ctf", arguments: true }, run: menu.run,
+    }, {
       id: "ctfcode.archive", title: "保存当前会话归档", palette: true,
       slash: { name: "archive" }, run: async () => {
         const route = ctx.ui.router.current();
@@ -44,6 +55,7 @@ export default {
       update((draft) => { draft.started = true; });
     }
     return async () => {
+      menu.close();
       unwatch();
       clearTimeout(timer);
       await flush();

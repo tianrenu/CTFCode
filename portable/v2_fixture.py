@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import sys
 
 
@@ -17,6 +18,7 @@ def main():
     parser.add_argument("--root", required=True)
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--tui", action="store_true")
+    parser.add_argument("--controller", action="store_true")
     parser.add_argument("--model-endpoint")
     parser.add_argument("--missing-tokenizer", action="store_true")
     parser.add_argument("--context", choices=("32", "64"), default="32")
@@ -42,8 +44,22 @@ def main():
                OPENCODE_CONFIG_CONTENT=json.dumps({"update": "disable", "share": "disabled", "warming": False,
                                                   "snapshots": False, "permissions": [
                                                       {"action": "*", "resource": "*", "effect": "deny"}]}))
-    if args.model_endpoint:
-        here = Path(__file__).resolve().parent / "成熟Agent接入/OpenCode"
+    owner = None
+    here = Path(__file__).resolve().parent / "成熟Agent接入/OpenCode"
+    if args.controller:
+        package = root / "隔离程序"
+        shutil.copytree(Path(__file__).resolve().parent, package, ignore=shutil.ignore_patterns(
+            "__pycache__", "local.json", "runtime", "components", "models", "独立环境", "程序", "state",
+            "会话记录", "当前运行.json", "settings.json", "当前启动参数.json", "64K摘要输出约束_分词器.json"))
+        spec = importlib.util.spec_from_file_location("fixture_boot", package / "bootstrap.py")
+        boot = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(boot)
+        model = root / "空模型目录"
+        model.mkdir()
+        boot.configure(model)
+        boot.write(package / "local.json", {"model": str(model)})
+        here = boot.HERE
+    if args.model_endpoint or args.controller:
         sys.path.insert(0, str(here))
         import opencode_runtime as runtime
         spec = importlib.util.spec_from_file_location("v2_settings", here / "v2/settings.py")
@@ -60,25 +76,41 @@ def main():
                 "blocked_token_id": 248058, "vocabulary_path": str(vocab),
                 "vocabulary_sha256": hashlib.sha256(vocab.read_bytes()).hexdigest()}), encoding="utf-8")
         cfg["plugins"][0]["options"]["tokenizer"] = str(manifest)
-        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(cfg)
+        if args.controller:
+            spec = importlib.util.spec_from_file_location("fixture_controller", here / "v2/controller.py")
+            controller = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(controller)
+            owner = controller.Controller(runtime, boot, settings, root / "控制器记录", context=args.context)
+            cfg["plugins"][0]["options"]["controller"] = owner.connection()
+            runtime.safety.write(owner.file, cfg)
+            env.pop("OPENCODE_CONFIG_CONTENT", None)
+            env["OPENCODE_CONFIG"] = str(owner.file)
+        if not args.controller:
+            env["OPENCODE_CONFIG_CONTENT"] = json.dumps(cfg)
         env["CTFCODE_PYTHON"] = str(Path(sys.executable).resolve())
     if args.tui:
-        source = Path(__file__).resolve().parent / "成熟Agent接入/OpenCode"
+        options = cfg["plugins"][0]["options"] if args.controller or args.model_endpoint else {
+            "python": str(Path(sys.executable).resolve()), "validator": str(here / "opencode_runtime.py")}
+        options = {**options, "startup": str(root / "题目 A")}
         env["OPENCODE_CLI_CONFIG_CONTENT"] = json.dumps({"tabs": {"mode": "off"}, "highlights": False,
-            "plugins": [{"package": (source / "v2").as_uri(), "options": {
-                "python": str(Path(sys.executable).resolve()), "validator": str(source / "opencode_runtime.py"),
-                "startup": str(root / "题目 A")}}]})
-    with module.OwnedProcessJob(process_mib=1536, total_mib=2048, max_processes=12,
+            "plugins": [{"package": (here / "v2").as_uri(), "options": options}]})
+    try:
+        with module.OwnedProcessJob(process_mib=1536, total_mib=2048, max_processes=12,
                                ledger=root / "service-job.jsonl") as job:
-        if args.tui:
-            child = job.spawn([str(Path(args.cli).resolve()), str(root / "题目 A"), "--standalone"],
-                              cwd=root, env=env)
-            return child.wait()
-        with (root / "service.stdout.log").open("wb") as out, (root / "service.stderr.log").open("wb") as err:
-            child = job.spawn([str(Path(args.cli).resolve()), "serve", "--hostname", "127.0.0.1",
-                               "--port", str(args.port)], cwd=root, env=env, stdout=out, stderr=err)
-            print(json.dumps({"pid": child.pid, "port": args.port, "model_loaded": False}), flush=True)
-            sys.stdin.buffer.read()
+            if args.tui:
+                child = job.spawn([str(Path(args.cli).resolve()), str(root / "题目 A"), "--standalone"],
+                                  cwd=root, env=env)
+                return child.wait()
+            with (root / "service.stdout.log").open("wb") as out, (root / "service.stderr.log").open("wb") as err:
+                child = job.spawn([str(Path(args.cli).resolve()), "serve", "--hostname", "127.0.0.1",
+                                   "--port", str(args.port)], cwd=root, env=env, stdout=out, stderr=err)
+                # 认证信息只写父测试进程的私有pipe，不写磁盘/测试报告。
+                print(json.dumps({"pid": child.pid, "port": args.port, "model_loaded": False,
+                                  **({"controller": owner.connection(), "validator": str(here / "opencode_runtime.py")} if owner else {})}), flush=True)
+                sys.stdin.buffer.read()
+    finally:
+        if owner:
+            owner.close()
     return 0
 
 

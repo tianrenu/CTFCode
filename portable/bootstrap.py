@@ -130,7 +130,7 @@ def main(argv=None):
         print("已保存本包模型位置；未修改旧工具箱、桌面版或全局配置。")
         return 0
     path = model()
-    if args[:1] == ["ui"] and "--dry-run" not in args and not ready(path):
+    if args[:1] == ["ui"] and "--dry-run" not in args and "--native" not in args and not ready(path):
         if not sys.stdin.isatty():
             raise RuntimeError("尚未配置模型；先使用 setup --model <模型目录> --prepare")
         print("便携包已含 CLI、定制插件、Python、Strata 及引擎。模型权重须单独下载。")

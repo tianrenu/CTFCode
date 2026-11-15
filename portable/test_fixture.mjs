@@ -32,9 +32,11 @@ export async function fixture(t, opts = {}) {
   const value = await port();
   const child = spawn(python, ["-I", "-X", "utf8", "-u", path.join(root, "v2_fixture.py"), "--cli", cli,
     "--root", dir, "--port", String(value), ...(opts.model ? ["--model-endpoint", opts.model, "--context", opts.context ?? "32"] : []),
-    ...(opts.tokenizer === false ? ["--missing-tokenizer"] : [])],
+    ...(opts.tokenizer === false ? ["--missing-tokenizer"] : []), ...(opts.controller ? ["--controller"] : [])],
     { windowsHide: true, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, CTFCODE_FIXTURE_KEY: token } });
   let err = "";
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { err += chunk; });
   t.after(async () => {
     child.stdin.end();
@@ -65,5 +67,6 @@ export async function fixture(t, opts = {}) {
   const client = { session: { create: (value) => api("/api/session", value),
     get: ({ sessionID }) => api("/api/session/" + sessionID), active: () => api("/api/session/active"),
   }, experimental: { session: { export: ({ sessionID }) => api("/api/experimental/session/" + sessionID + "/export") } } };
-  return { dir, a, b, api, client, calls };
+  const metadata = JSON.parse(output.trim());
+  return { dir, a, b, api, client, calls, controller: metadata.controller, validator: metadata.validator };
 }

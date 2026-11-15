@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import { inspectPythonSource } from "../ctf-tools.mjs";
 import Compaction from "../ctf-compaction.mjs";
 import { createCompactionTransport } from "../compaction-cache.mjs";
+import { control } from "./control.mjs";
 
 const descriptions = {
   shell: "执行本机PowerShell命令。带引号程序路径用&调用；不使用Bash heredoc。复杂代码先write保存脚本，再单独执行并读取产物。默认120秒，最多600秒，不使用后台命令或无限超时。普通分析免逐条确认，高风险操作仍按权限审批，不得换工具绕过。大输出过滤或落盘。",
@@ -73,6 +74,8 @@ export default {
       if (event.model.providerID !== opts.model.providerID || event.model.id !== opts.model.id ||
           event.request.url !== base.href.replace(/\/$/, "") + "/chat/completions")
         throw new Error("V2实际模型请求超出已配置的单模型/本地端点");
+      if (opts.controller) await control(opts, "ready", { session: event.sessionID,
+        directory: ctx.location.directory, physical: opts.physical });
       const bias = await ready();
       if (event.kind !== "compaction") return;
       const text = await event.request.clone().text();
