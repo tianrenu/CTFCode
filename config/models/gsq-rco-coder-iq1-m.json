@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "repository": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF",
+  "revision": "bba88856f8c3c0c9e40e45f82d05e228b814ac43",
+  "quantization": "IQ1_M",
+  "total_bytes": 58408584928,
+  "homepage": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF",
+  "mirror": "https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF",
+  "files": [
+    {
+      "path": "IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf",
+      "bytes": 29608446496,
+      "sha256": "bfa3644db4adfff072fc946c20994f2909d2cf89879d83f80a4c811d4016c211",
+      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/bba88856f8c3c0c9e40e45f82d05e228b814ac43/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf",
+      "mirror": "https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/bba88856f8c3c0c9e40e45f82d05e228b814ac43/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf"
+    },
+    {
+      "path": "IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf",
+      "bytes": 28800138432,
+      "sha256": "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113",
+      "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/bba88856f8c3c0c9e40e45f82d05e228b814ac43/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf",
+      "mirror": "https://hf-mirror.com/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF/resolve/bba88856f8c3c0c9e40e45f82d05e228b814ac43/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf"
+    }
+  ],
+  "verification": {
+    "checked": "2026-11-15",
+    "sha256_source": "2026-10-28 从 Hugging Face 官方文件页记录，并与镜像对照。",
+    "current_check": "本次经 hf-mirror API 核对仓库、revision 和文件名；Hugging Face 官方 API 本次直连超时，未重新取得官方哈希。"
+  }
+}

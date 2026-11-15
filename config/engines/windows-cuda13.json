@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/Niko1221/Strata",
+  "platform": "windows-x86_64",
+  "backend": "cuda13",
+  "control": {
+    "version": "0.1.52",
+    "release": "https://github.com/Niko1221/Strata/releases/tag/v0.2.7",
+    "file": "strata-control-0.1.52-windows-x86_64.zip",
+    "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-control-0.1.52-windows-x86_64.zip",
+    "bytes": 73055714,
+    "sha256": "b8d9352bf283c4f7783d362c11078aa3e40f4c547c6d1591bee87771ceb5eb52"
+  },
+  "baseline": {
+    "version": "0.1.52",
+    "context": 32768,
+    "status": "baseline",
+    "release": "https://github.com/Niko1221/Strata/releases/tag/v0.2.7",
+    "file": "strata-engine-0.1.52-windows-x86_64-cuda-cuda13.tar.gz",
+    "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.7/strata-engine-0.1.52-windows-x86_64-cuda-cuda13.tar.gz",
+    "bytes": 620430878,
+    "sha256": "bfa68c6b2e92f9c273caaf937d9ae164918e6de4cca2dc1f1d79d32470f0915a"
+  },
+  "candidate": {
+    "version": "0.1.59",
+    "context": 65536,
+    "status": "experimental",
+    "release": "https://github.com/Niko1221/Strata/releases/tag/v0.2.13",
+    "file": "strata-engine-0.1.59-windows-x86_64-cuda-cuda13.tar.gz",
+    "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.13/strata-engine-0.1.59-windows-x86_64-cuda-cuda13.tar.gz",
+    "bytes": 630783433,
+    "sha256": "3f071a7ccbbf3dcdefed8bff777896d8dd0b580417a078154a7d2c2402ec4158",
+    "manifest_sha256": "102238fc50b9941a990cafcb0ead565eaf34ae235685d8fbdd4471774f066f88",
+    "build": "712fec6b4297+cuda13.0",
+    "min_driver": "580.65"
+  },
+  "verification": {
+    "checked": "2026-11-15",
+    "source": "GitHub Releases API：核对 asset 名称、字节数及 sha256 digest；未重新下载完整包。"
+  }
+}
