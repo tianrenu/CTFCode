@@ -1,0 +1,9 @@
+{
+  "model": "qwen3.8-flash-next-coder-iq1_m",
+  "vocabulary_path": "${VOCAB}",
+  "vocabulary_sha256": "4ba64f0332abcfb0b600b7df1537d1e836e68009d5fb7cdb77339738dc6365c4",
+  "blocked_token": "<tool_call>",
+  "blocked_token_id": 248058,
+  "bias": -100,
+  "scope": "仅同会话已适配的摘要请求；不改变普通工具请求、工具权限或响应工具调用拒绝器。"
+}

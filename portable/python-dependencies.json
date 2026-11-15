@@ -1,0 +1,30 @@
+{
+  "packages": [
+    {
+      "name": "pefile",
+      "version": "2024.8.26",
+      "file": "pefile-2024.8.26-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl",
+      "sha256": "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"
+    },
+    {
+      "name": "capstone",
+      "version": "5.0.6",
+      "file": "capstone-5.0.6-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/da/72/ff7894c2fb5716d9a3ce9c27ba34b29d991a11d8442d2ef0fcdc5564ba7e/capstone-5.0.6-py3-none-win_amd64.whl",
+      "sha256": "761c3deae00b22ac697081cdae1383bb90659dd0d79387a09cf5bdbb22b17064"
+    },
+    {
+      "name": "unicorn",
+      "version": "2.1.4",
+      "file": "unicorn-2.1.4-cp37-abi3-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/70/3d/de7be9bd1addabe6d8a1369381f8a080400c349850e978689c5e18287957/unicorn-2.1.4-cp37-abi3-win_amd64.whl",
+      "sha256": "d7107500c64ce5c168fbff6bef9485b5db1350050036f4cea568650cf8bdbdf5",
+      "source": {
+        "file": "unicorn-2.1.4.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/b2/1b/b4248aa8422e86de690cf8e85cf8feae4c33405a097d1ebe71570bdaa6f5/unicorn-2.1.4.tar.gz",
+        "sha256": "00567a70e323f749b419cd86bee4f9115beab7ebba32194581c090cbb7c59cff"
+      }
+    }
+  ]
+}

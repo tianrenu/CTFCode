@@ -42,3 +42,18 @@ tsconfig.tsbuildinfo
 /.env.*
 !/.env.example
 !/.env.sample
+
+# 便携版只跟踪定制源码；二进制由白名单构建进入 Release。
+/portable/local.json
+/portable/**/__pycache__/
+/portable/成熟Agent接入/OpenCode/程序/
+/portable/成熟Agent接入/OpenCode/独立环境/
+/portable/成熟Agent接入/OpenCode/当前运行.json
+/portable/成熟Agent接入/OpenCode/64K摘要输出约束_分词器.json
+/portable/本地模型配置与日志/Strata验证/models/
+/portable/本地模型配置与日志/Strata验证/runtime/
+/portable/本地模型配置与日志/Strata验证/components/
+/portable/本地模型配置与日志/Strata验证/会话记录/
+/portable/本地模型配置与日志/Strata验证/state/
+/portable/本地模型配置与日志/Strata验证/settings.json
+/portable/本地模型配置与日志/Strata验证/当前启动参数.json

@@ -1,12 +1,12 @@
-# CTFCode（整合中）
+# CTFCode（Windows 便携测试版）
 
-面向本地 CTF 的 OpenCode CLI/TUI + Strata + GSQ-RCO Coder IQ1_M 整合项目。目前保留 OpenCode 上游源码，定制运行链尚未全部移植，**不是已完成的开箱即用发行版**。
+面向本地 CTF 的 OpenCode CLI/TUI + Strata + GSQ-RCO Coder IQ1_M 整合项目。定制运行链与插件已迁入 `portable/`，Windows 便携测试包自带 CLI、Python、Strata、两档引擎和依赖，不要求用户手工拼装。尚未完成干净机器及真实模型长任务的重新验收。
 
-> **重要：当前下载包没有包含作者现用的 CTF 定制层。下载原版 OpenCode 并使用示例配置，只能得到基础模型连接，不能复现现有工具箱的优化。请勿将它当作“优化版 OpenCode”安装。** 详见[定制层迁移状态](docs/定制层迁移状态.md)。
+> **正常使用请下载 [windows-x64 便携包](https://github.com/tianrenu/CTFCode/releases/tag/v0.1.0-preview.2)，不要只下载 Source code，也不需要另外安装原版 OpenCode。** 模型权重约 58.4GB，仍需单独下载或复用已有目录。解压后使用包内的 `3_CTF做题界面.bat`；不能只拖出 `opencode.exe`，否则会绕过定制层。
 
-**从这里开始：[中文部署指南](docs/README.md)** · [模型下载与校验](docs/模型下载与校验.md) · [引擎下载与配置](docs/引擎下载与配置.md) · [首次连接与故障排查](docs/首次连接与故障排查.md)
+**从这里开始：[便携版使用](docs/便携版使用.md)** · [模型下载与校验](docs/模型下载与校验.md) · [完整部署资料](docs/README.md) · [迁移与验收状态](docs/定制层迁移状态.md)
 
-首版定位：[v0.1.0-preview.1 源码与部署指南预览](docs/发布说明.md)。它不包含权重、已构建安装器或尚未移植的本机优化运行链。
+旧的 [v0.1.0-preview.1](docs/发布说明.md) 只是源码/文档预览，不含定制层。当前便携测试版带入了定制，不应把旧版或手动基础连接教程当作本版安装方案。
 
 指南明确列出模型两个分片及 Strata Control/32K/64K 引擎的固定版本、官方/镜像直链、大小和 SHA256，并提供不影响桌面版的独立 CLI 配置。权重、引擎二进制及本机会话不随源码发布。
 
