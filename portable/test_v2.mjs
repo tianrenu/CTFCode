@@ -3,71 +3,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
-import net from "node:net";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import crypto from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { policy } from "./成熟Agent接入/OpenCode/v2/session-policy.mjs";
+import { fixture, root, python, skip } from "./test_fixture.mjs";
 
-const root = path.dirname(fileURLToPath(import.meta.url));
-const cli = process.env.CTFCODE_V2_CLI;
-const python = process.env.CTFCODE_PYTHON;
 const opts = { python, validator: path.join(root, "成熟Agent接入/OpenCode/opencode_runtime.py") };
 
 test("真正V2 API：切目录/重开同目录产生空白新会话，旧记录归档原目录", {
-  skip: !cli || !python ? "需显式指定CTFCODE_V2_CLI和CTFCODE_PYTHON；不使用全局/桌面CLI替代" : false,
+  skip,
   timeout: 120000,
 }, async (t) => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "CTFCode V2 真服务 "));
-  const a = path.join(dir, "题目 A");
-  const b = path.join(dir, "题目 B");
-  await Promise.all([fs.mkdir(a), fs.mkdir(b), fs.writeFile(path.join(dir, "fixture.marker"), "synthetic API test")]);
-  const socket = net.createServer();
-  socket.listen(0, "127.0.0.1");
-  await once(socket, "listening");
-  const port = socket.address().port;
-  await new Promise((resolve) => socket.close(resolve));
-  const token = crypto.randomBytes(24).toString("base64url");
-  const headers = { Authorization: "Basic " + Buffer.from("opencode:" + token).toString("base64") };
-  const child = spawn(python, ["-I", "-X", "utf8", "-u", path.join(root, "v2_fixture.py"), "--cli", cli,
-    "--root", dir, "--port", String(port)], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, CTFCODE_FIXTURE_KEY: token } });
-  let err = "";
-  child.stderr.on("data", (chunk) => { err += chunk; });
-  t.after(async () => {
-    child.stdin.end();
-    if (child.exitCode === null) await Promise.race([once(child, "exit"),
-      new Promise((resolve) => setTimeout(resolve, 10000).unref())]);
-    if (child.exitCode === null) child.kill();
-    // 错误时保留服务日志；成功后的临时目录留给系统临时文件管理，不删除不明进程的文件。
-  });
-  const url = "http://127.0.0.1:" + port;
-  const calls = [];
-  async function api(route, body) {
-    calls.push(route);
-    const res = await fetch(url + route, { method: body === undefined ? "GET" : "POST",
-      headers: { ...headers, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(10000) });
-    const json = await res.json();
-    if (!res.ok) throw new Error(JSON.stringify({ status: res.status, route, json }));
-    return json.data ?? json;
-  }
-  const deadline = Date.now() + 45000;
-  while (true) {
-    if (child.exitCode !== null) throw new Error("服务已退出：" + err);
-    const ready = await fetch(url + "/api/session/active", { headers, signal: AbortSignal.timeout(1000) }).then((res) => res.ok, () => false);
-    if (ready) break;
-    if (Date.now() > deadline) throw new Error("服务启动超时：" + err + "；日志：" + dir);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  const client = { session: {
-    create: (value) => api("/api/session", value),
-    get: ({ sessionID }) => api("/api/session/" + sessionID),
-    active: () => api("/api/session/active"),
-  }, experimental: { session: { export: ({ sessionID }) => api("/api/experimental/session/" + sessionID + "/export") } } };
+  const { dir, a, b, api, client, calls } = await fixture(t);
   const old = await client.session.create({ location: { directory: a }, title: "合成旧会话" });
   const id = "ses_" + crypto.randomUUID().replaceAll("-", "");
   const text = "OLD_CONTEXT_" + crypto.randomUUID();

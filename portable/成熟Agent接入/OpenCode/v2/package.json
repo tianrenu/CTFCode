@@ -5,6 +5,7 @@
   "type": "module",
   "license": "MIT",
   "exports": {
+    "./server": "./ctf-server.mjs",
     "./tui": "./ctf-tui.mjs"
   }
 }

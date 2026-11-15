@@ -58,8 +58,8 @@ async function contextOverflow(response) {
   finally { reader.releaseLock(); }
 }
 
-async function loadCompactionLogitBias() {
-  const manifest = JSON.parse(await fs.readFile(new URL("./64K摘要输出约束_分词器.json", import.meta.url), "utf8"));
+async function loadCompactionLogitBias(source = new URL("./64K摘要输出约束_分词器.json", import.meta.url)) {
+  const manifest = JSON.parse(await fs.readFile(source, "utf8"));
   if (manifest.model !== MODEL || manifest.blocked_token !== "<tool_call>" || manifest.bias !== -100 ||
       !Number.isSafeInteger(manifest.blocked_token_id) || manifest.blocked_token_id < 0 ||
       !/^[a-f0-9]{64}$/.test(manifest.vocabulary_sha256) || !path.isAbsolute(manifest.vocabulary_path))

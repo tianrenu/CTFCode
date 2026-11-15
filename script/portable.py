@@ -20,7 +20,7 @@ SOURCES += [f"{OC}/{name}" for name in (
     "opencode_runtime.py", "opencode_engine.py", "opencode_safety.py", "owned_process_job.py",
     "ctf-context.mjs", "ctf-context-64k.mjs", "ctf-compaction.mjs", "compaction-cache.mjs",
     "ctf-tools.mjs", "session-archive.mjs", "opencode.json", "64K摘要输出约束_分词器.template.json")]
-SOURCES += [f"{OC}/v2/{name}" for name in ("package.json", "session-policy.mjs", "ctf-tui.mjs")]
+SOURCES += [f"{OC}/v2/{name}" for name in ("package.json", "session-policy.mjs", "ctf-tui.mjs", "ctf-server.mjs", "settings.py")]
 SOURCES += [f"{BASE}/{name}" for name in (
     "ctf_script_runner.py", "working_set_guard.py", "strata-feed.json", "strata-feed.json.sig", "官方模型哈希.json")]
 

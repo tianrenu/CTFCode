@@ -14,6 +14,9 @@ import unittest
 class Portable(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.path = list(sys.path)
+        cls.modules = {name: sys.modules.pop(name, None) for name in
+                       ("opencode_runtime", "opencode_engine", "opencode_safety")}
         cls.temp = tempfile.TemporaryDirectory(prefix="CTFCode 中文 空格 ")
         cls.root = Path(cls.temp.name) / "迁移后的程序"
         cls.model = Path(cls.temp.name) / "另一个位置的模型"
@@ -33,6 +36,11 @@ class Portable(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        sys.path[:] = cls.path
+        for name, module in cls.modules.items():
+            sys.modules.pop(name, None)
+            if module is not None:
+                sys.modules[name] = module
         for key, value in cls.env.items():
             if value is None:
                 os.environ.pop(key, None)

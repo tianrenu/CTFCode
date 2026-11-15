@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -16,6 +17,9 @@ def main():
     parser.add_argument("--root", required=True)
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--tui", action="store_true")
+    parser.add_argument("--model-endpoint")
+    parser.add_argument("--missing-tokenizer", action="store_true")
+    parser.add_argument("--context", choices=("32", "64"), default="32")
     args = parser.parse_args()
     root = Path(args.root).resolve()
     if not root.is_dir() or not (root / "fixture.marker").is_file():
@@ -38,6 +42,26 @@ def main():
                OPENCODE_CONFIG_CONTENT=json.dumps({"update": "disable", "share": "disabled", "warming": False,
                                                   "snapshots": False, "permissions": [
                                                       {"action": "*", "resource": "*", "effect": "deny"}]}))
+    if args.model_endpoint:
+        here = Path(__file__).resolve().parent / "成熟Agent接入/OpenCode"
+        sys.path.insert(0, str(here))
+        import opencode_runtime as runtime
+        spec = importlib.util.spec_from_file_location("v2_settings", here / "v2/settings.py")
+        settings = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(settings)
+        cfg = settings.make(runtime.config_for_context(runtime.config(), args.context), here, sys.executable,
+                            endpoint=args.model_endpoint, fixture=True)
+        # 明确的合成词表夹具，不代表真实模型词表/语义效果已验收。
+        vocab = root / "synthetic-vocab.json"
+        vocab.write_text(json.dumps({"<tool_call>": 248058, "fixture": 1}), encoding="utf-8")
+        manifest = root / "synthetic-tokenizer.json"
+        if not args.missing_tokenizer:
+            manifest.write_text(json.dumps({"model": settings.MODEL, "blocked_token": "<tool_call>", "bias": -100,
+                "blocked_token_id": 248058, "vocabulary_path": str(vocab),
+                "vocabulary_sha256": hashlib.sha256(vocab.read_bytes()).hexdigest()}), encoding="utf-8")
+        cfg["plugins"][0]["options"]["tokenizer"] = str(manifest)
+        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(cfg)
+        env["CTFCODE_PYTHON"] = str(Path(sys.executable).resolve())
     if args.tui:
         source = Path(__file__).resolve().parent / "成熟Agent接入/OpenCode"
         env["OPENCODE_CLI_CONFIG_CONTENT"] = json.dumps({"tabs": {"mode": "off"}, "highlights": False,
