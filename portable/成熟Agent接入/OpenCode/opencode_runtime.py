@@ -18,6 +18,7 @@ TOOLBOX = HERE.parents[1]
 BASE = (TOOLBOX / "本地模型配置与日志/Strata验证").resolve()
 EXE = HERE / "程序/opencode.exe"
 MODEL = "strata-local/qwen3.8-flash-next-coder-iq1_m"
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(BASE))
 import opencode_engine as engine
 import opencode_safety as safety
@@ -448,4 +449,16 @@ def launch(target, *, context_k=None):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--workspace-check"]:
+        try:
+            if len(sys.argv) != 3:
+                raise ValueError("工作目录校验只接受一个路径")
+            if not sys.argv[2] or any(char in sys.argv[2] for char in "\x00\r\n"):
+                raise ValueError("工作目录为空或包含控制字符")
+            workspace = validate_workspace(sys.argv[2])
+            print(json.dumps({"ok": True, "directory": str(workspace)}, ensure_ascii=False))
+        except (ValueError, OSError) as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            raise SystemExit(1)
+        raise SystemExit(0)
     raise SystemExit(launch(sys.argv[1]))
