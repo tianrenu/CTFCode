@@ -83,12 +83,14 @@ def build(opts):
     for name in SOURCES:
         data = (ROOT / "portable" / name).read_bytes()
         put(name, data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n") if name.endswith(".bat") else data)
+    put("README.md", (ROOT / "portable/先读我.md").read_bytes())
     put("licenses/OpenCode-MIT.txt", (ROOT / "LICENSE").read_bytes())
     put("licenses/CTFCode-OpenCode.patch", (ROOT / "patches/ctfcode-v2.3.0.patch").read_bytes())
     put("licenses/CTFCode-native-build.json", (ROOT / "script/native-lock.json").read_bytes())
-    for name in ("模型下载与校验.md", "引擎下载与配置.md", "便携版使用.md", "定制CLI构建.md"):
+    for name in ("README.md", "模型下载与校验.md", "引擎下载与配置.md", "便携版使用.md", "定制CLI构建.md",
+                 "TUI整合进度.md", "首次连接与故障排查.md", "定制层迁移状态.md", "发布说明.md"):
         put("文档/" + name, (ROOT / "docs" / name).read_bytes())
-    for name in ("models/gsq-rco-coder-iq1-m.json", "engines/windows-cuda13.json"):
+    for name in ("models/gsq-rco-coder-iq1-m.json", "engines/windows-cuda13.json", "opencode.example.json"):
         put("config/" + name, (ROOT / "config" / name).read_bytes())
     for name in ("Strata-LICENSE.txt", "NVIDIA-CUDA-EULA.html"):
         put("licenses/" + name, (cache / name).read_bytes())

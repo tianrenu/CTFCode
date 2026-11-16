@@ -1,12 +1,12 @@
 # CTFCode（Windows 便携测试版）
 
-面向本地 CTF 的 OpenCode CLI/TUI + Strata + GSQ-RCO Coder IQ1_M 整合项目。定制运行链与插件已迁入 `portable/`，Windows 便携测试包自带 CLI、Python、Strata、两档引擎和依赖，不要求用户手工拼装。尚未完成干净机器及真实模型长任务的重新验收。
+面向本地CTF的独立OpenCode TUI + Strata + GSQ-RCO Coder IQ1_M整合项目。便携包自带源码编译的定制CLI、Python、两档引擎和分析依赖，TUI内统一换目录、空白会话、归档、模型与上下文控制。已完成参考机器的真实生成、重载、压缩、取消及退出验收；不等于近满64K长期稳定或另一台电脑已验收。
 
-> **正常使用请下载 [windows-x64 便携包](https://github.com/tianrenu/CTFCode/releases/tag/v0.1.0-preview.2)，不要只下载 Source code，也不需要另外安装原版 OpenCode。** 模型权重约 58.4GB，仍需单独下载或复用已有目录。解压后使用包内的 `3_CTF做题界面.bat`；不能只拖出 `opencode.exe`，否则会绕过定制层。
+> **正常使用请下载 [v0.1.0-preview.3 windows-x64便携包](https://github.com/tianrenu/CTFCode/releases/tag/v0.1.0-preview.3)，不要只下载Source code，也不需要另外安装原版OpenCode。** 模型权重约58.4GB，另行下载或复用已有目录；首次只有GGUF时按指南准备一次pack。解压后运行 `3_CTF做题界面.bat`，用 `/cd` 打开题目、`/ctf` 管理模型；不能只拖出EXE，否则会绕过定制层。
 
 **从这里开始：[便携版使用](docs/便携版使用.md)** · [模型下载与校验](docs/模型下载与校验.md) · [完整部署资料](docs/README.md) · [迁移与验收状态](docs/定制层迁移状态.md)
 
-`dev` 正在收尾基于OpenCode 2.3.0源码编译的独立CTF TUI：目录切换、空白新会话、原目录归档、模型控制与自检已接入。它与上方已发布的preview.2不是同一版本；当前门槛、失败证据及未交付项见[收尾验收](docs/TUI整合进度.md)，尚未把开发验收包替换成正式下载包。
+本版使用从OpenCode 2.3.0源码编译的 `2.3.0-ctfcode.2`，不是将原版EXE改名。每次打开/切换目录或 `/new` 都新建空白会话，旧记录留在原题目目录，不自动恢复。本机原3/7号入口已经切换并验收；过程中的失败、修复与最终结果见[收尾验收](docs/TUI整合进度.md)。64K仍是显式候选，不承诺恒定10+ token/s或独立解出所有CTF题目。
 
 旧的 [v0.1.0-preview.1](docs/发布说明.md) 只是源码/文档预览，不含定制层。当前便携测试版带入了定制，不应把旧版或手动基础连接教程当作本版安装方案。
 

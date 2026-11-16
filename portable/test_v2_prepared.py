@@ -35,7 +35,7 @@ class Prepared(unittest.TestCase):
 
     def test_profiles(self):
         before = {str(p): (p.stat().st_size, p.stat().st_mtime_ns) for p in self.model.rglob("*") if p.is_file()}
-        for context, spec in ((32768, "4"), (65536, "6")):
+        for context in (32768, 65536):
             report = json.loads(self.runprep(context).stdout)
             self.assertTrue(report["installed_config_matches"])
             self.assertFalse(report["model_loaded"])
@@ -46,7 +46,7 @@ class Prepared(unittest.TestCase):
             self.assertEqual(cfg["host"], "127.0.0.1")
             self.assertEqual(cfg["exe"], "component:strata-engine")
             self.assertEqual(cfg["args"][cfg["args"].index("--max-context") + 1], str(context))
-            self.assertEqual(cfg["args"][cfg["args"].index("--spec") + 1], spec)
+            self.assertEqual(cfg["args"][cfg["args"].index("--spec") + 1], "4")
             self.assertNotIn("--mtp", cfg["args"])
         after = {str(p): (p.stat().st_size, p.stat().st_mtime_ns) for p in self.model.rglob("*") if p.is_file()}
         self.assertEqual(before, after, "生成运行配置不得改动模型文件")

@@ -279,7 +279,14 @@ class Controller:
                 raise ValueError("实际引擎不属于所选版本；停止本轮")
             response = engine.SESSION.get(engine.URL + "/metrics", timeout=4)
             response.raise_for_status()
-            verified = self.runtime.verify_context_runtime(context, engine.native.cmdline(), engine.native.environ(), response.json())
+            argv = engine.native.cmdline()
+            env = engine.native.environ()
+            metrics = response.json()
+            self.runtime.safety.write(out / "运行核验输入.json", {"argv": argv, "metrics": metrics,
+                "environment": {key: env[key] for key in ("STRATA_HC_Q8", "STRATA_HC_Q8_INJECT", "STRATA_HC_REQ8",
+                    "STRATA_COMPONENTS_DIR", "STRATA_PCIE_START", "STRATA_LOOKUP_MAX_T", "STRATA_WS_GUARD_POLL_MS",
+                    "STRATA_TEST_WS_MIN_MIB") if key in env}})
+            verified = self.runtime.verify_context_runtime(context, argv, env, metrics)
             with self.mutex:
                 if engine.abort.is_set():
                     raise RuntimeError("加载完成时收到停止请求；未开放模型调用")

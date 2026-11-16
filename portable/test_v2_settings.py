@@ -35,6 +35,20 @@ class Settings(unittest.TestCase):
         self.assertFalse(set(cfg) & {"small_model", "provider", "agent", "permission", "plugin", "enabled_providers"})
         self.assertEqual(list(cfg["providers"]), ["strata-local"])
 
+    def test_runtime(self):
+        profile = runtime.context_profile(runtime.config_for_context(runtime.config(), "64"))
+        env = runtime.context_environment(profile, {})
+        argv = [value for pair in (("--max-context", "65536"), ("--kv", "q4_0"), ("--spec", "4"),
+            ("--prefill", "128"), ("--pool-workers", "13"), ("--expert-cache", "auto"),
+            ("--vram-reserve-mib", "1792"), ("--prompt-cache", "1"), ("--conversation-cache-mib", "0")) for value in pair]
+        metrics = {"engine": {"max_context": 65536, "version": "0.1.59", "spec": 6}}
+        self.assertTrue(runtime.verify_context_runtime(profile, argv, env, metrics)["verified"])
+        with self.assertRaisesRegex(ValueError, "投机窗口"):
+            runtime.verify_context_runtime(profile, argv, env, {"engine": {**metrics["engine"], "spec": 8}})
+        argv[argv.index("--spec") + 1] = "6"
+        with self.assertRaisesRegex(ValueError, "--spec"):
+            runtime.verify_context_runtime(profile, argv, env, metrics)
+
     def test_shell_rules(self):
         cfg = self.config()
         shell = [rule for rule in cfg["permissions"] if rule["action"] == "shell"]

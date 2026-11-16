@@ -157,7 +157,7 @@ def context_environment(profile, source):
 
 def verify_context_runtime(profile, argv, env, metrics):
     """启动前后声明一致性；必须核验真实argv/env/metrics，不能只改JSON。"""
-    for key, value in (("--max-context", str(profile["physical_context"])), ("--kv", "q4_0"),
+    for key, value in (("--max-context", str(profile["physical_context"])), ("--kv", "q4_0"), ("--spec", "4"),
                        ("--prefill", "128"), ("--pool-workers", "13"), ("--expert-cache", "auto"),
                        ("--vram-reserve-mib", "1792"), ("--prompt-cache", "1"), ("--conversation-cache-mib", "0")):
         if argv.count(key) != 1 or argv[argv.index(key)+1:argv.index(key)+2] != [value]:
@@ -177,7 +177,7 @@ def verify_context_runtime(profile, argv, env, metrics):
         if env.get(key) != (value if profile["physical_context"] == 65536 else None):
             raise ValueError("真实兼容策略与运行档不符："+key)
     if profile["physical_context"] == 65536 and metrics.get("engine", {}).get("spec") != 6:
-        raise ValueError("真实64K投机窗口不是已测的6；未进入TUI")
+        raise ValueError("真实64K投机窗口不是已测的6（报告" + str(metrics.get("engine", {}).get("spec")) + "）；未进入TUI")
     if profile["physical_context"] == 65536 and any(env.get(k) != v for k,v in (("STRATA_WS_GUARD_POLL_MS","100"),("STRATA_TEST_WS_MIN_MIB","4"))):
         raise ValueError("真实64K工作集守护参数与已测配置不符；未进入TUI")
     return {"physical_context": profile["physical_context"], "hc_projection": profile["hc_projection"],

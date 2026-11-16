@@ -1,5 +1,7 @@
 # TUI整合进度
 
+本文件按时间顺序保留迁移、受阻和失败记录。**当前结论请看文末“最终真机与原入口验收”**；前文“未完成”是当时状态，不代表仍有同一缺口。
+
 ## 已确认的会话规则
 
 1. 每次启动、打开或切换工作目录，一律新建空白会话。重新打开同一目录也不恢复旧会话，不重放旧消息、工具结果或压缩摘要。
@@ -11,7 +13,7 @@
 7. 此规则只作用于这套独立 CTFCode，不修改或清理用户另用的桌面 OpenCode。
 8. 新会话不等于重新加载模型。切题只更换会话ID、目录和消息上下文，已加载的同一模型可以继续驻留；旧消息不能因此自动带入。
 
-## 当前阶段：V2 控制中心已接通，尚未替换正式入口
+## 历史阶段：V2 控制中心接通、尚未替换正式入口
 
 - 用户选择直接整合到独立 OpenCode TUI，不修改桌面版。
 - 纠正：项目基于旧版 1.2.26，没有原生 `/cd`，但不能据此说 OpenCode 不支持会话内切换目录。
@@ -186,8 +188,35 @@ python -m unittest -v test_v2_controller.py test_v2_settings.py test_portable.py
 
 本机证据：`.local/native-build/closing-tui.local.json`、`closing-default-dryrun.log`、`closing-check-active.log`、`closing-check-64.log`、`closing-python.log`、`closing-node-final.log`；便携验收副本位于 `.local/closing-validation-20261116/CTFCode`。本机配置、会话及这些路径不进入GitHub发布包。
 
+## 最终真机与原入口验收（2026-11-16）
+
+以下为用户释放资源后的新证据，覆盖此前受阻的完成门槛；上文保留当时失败，不把它们删除或改写成成功。
+
+| 项目 | 实际结果 |
+| --- | --- |
+| 32K真实生成 | 0.1.52引擎、物理32768核验通过，真实回复 `NATIVE32_OK` |
+| 脚本执行链 | 模型自写Python，真实shell退出0、结果读回；宿主独立计算SHA256一致，原始回执哈希复核通过 |
+| 卸载后重载 | 原native/guard退出，第二代进程重新加载并回复 `RELOADED32_OK`；新会话ID不同，旧消息未自动恢复 |
+| 64K真实短测 | 0.1.59签名引擎、物理65536、HC Q8及实际投机窗口6核验，真实回复 `NATIVE64_OK` |
+| 运行中停止 | 在原生metrics明确为generating时执行 `/ctf stop`；会话归档为interrupted，native/guard均退出，TUI保留 |
+| 安装目录复核 | 在最终安装布局重新32K加载，明确脚本合同下达到readback_observed；原生 `/compact` 实际生成合规摘要并completed，压缩后回复 `COMPACT_OK`，最新只读要求不触发旧写任务 |
+| 外部退出 | 7号在模型驻留时请求退出，TUI先归档/卸载再正常退出0，无强杀兜底或遗留模型 |
+| 原3/7号入口 | 已切到安装布局，dry-run和自检通过；实际再次打开旧题目目录创建不同ID空白会话，原7号可正常关闭，附件和成果保留 |
+
+### 真机发现并修复的最后一个参数映射错误
+
+最初64K准备配置把 `--spec` 写成6，0.1.59实际报告的verify窗口为8，已有校验因此拒绝开放模型调用并清理本轮。修正为请求参数4，对应实际窗口6；32K本来就是参数4，未改变。没有把校验改成接受8，也没有降低RAM/VRAM保护。新增正反回归验证请求参数与报告值，启动前后的argv、选定环境及metrics会落盘，防止以后只看界面数字。
+
+### 范围与工程记录
+
+- Python52项：50通过、2因Windows符号链接权限跳过；Node45项：44通过、1真实词表用例默认跳过。定制CLI的上游Core/TUI测试、三个package的typecheck与编译证据另行保留。
+- 单次短输出的原生decode约13.3–14.9 token/s，样本仅26–34 token，不当作稳定性能基准；冷首轮仍需约106–161秒。缓存、桌面负载和磁盘IO会影响体验，不能保证恒定10+。
+- 保留16GiB可用RAM加载门禁、1792MiB显存预留、14GiB/100ms工作集守护及单模型/所有权/退出清理；没有关闭用户应用、搬动模型或修改桌面版配置。
+- 本机证据索引在忽略目录 `.local/native-build/final-lifecycle-proof.local.json`、`production-lifecycle.local.json`、`production-script-state.local.json`、`production-after-compact-state.local.json`、`entrypoint-cutover.local.json`、`root-newsession-state.local.json`；原始会话在各自测试题目目录。证据、本机绝对路径配置和测试附件不进入Release。
+- 顶层仍使用原3/7号入口，模型保持原位置。发布目标为 `v0.1.0-preview.3`；便携包仅含白名单运行文件，模型和会话不随包上传。
+
 ## 验收边界
 
 - 新迁移先验证目录/配置门禁、取消和真实子进程交接；真实模型验收必须保留既有资源保护，不以空模型或合成响应代替。
 - 新版兼容性通过前，不覆盖用户旧入口；不修改已发布 preview.2 资产。
-- 当前目标保持未完成；不能把上述局部验证说成完整可用或真实模型解题通过。
+- 本轮TUI整合、真机短生命周期和原入口切换已验收；不把它们扩张为复杂CTF独立解题、近满64K长期稳定、首次从GGUF准备pack或另一台干净电脑的保证。

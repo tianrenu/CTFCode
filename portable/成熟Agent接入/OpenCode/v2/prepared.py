@@ -46,7 +46,8 @@ def main(argv=None):
     if "--mtp" in cfg["args"]:
         index = cfg["args"].index("--mtp")
         del cfg["args"][index:index + 2]
-    cfg["args"][cfg["args"].index("--spec") + 1] = "6" if args.context == 65536 else "4"
+    # --spec是草稿数量；引擎metrics的verify窗口还计入两格，4对应已测的窗口6。
+    cfg["args"][cfg["args"].index("--spec") + 1] = "4"
     cfg.update(port=18791, host="127.0.0.1")
     file = out / "strata-coder-iq1_m.json"
     if file.is_symlink() or file.exists():
