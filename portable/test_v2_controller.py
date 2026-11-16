@@ -84,12 +84,63 @@ class Controller(unittest.TestCase):
             self.assertNotIn(self.owner.secret, path.read_text(encoding="utf-8"))
         self.assertNotIn(self.owner.secret, json.dumps(data))
 
+    @unittest.skipUnless(os.name == "nt", "Win32元数据长路径")
+    def test_extended(self):
+        a = Path(self.control.extended(self.out / ("a" * 90)))
+        b = a / ("b" * 90)
+        file = b / "state.json"
+        self.assertGreater(len(str(file)), 260)
+        try:
+            b.mkdir(parents=True)
+            file.write_text('{"owned":true}', encoding="utf-8")
+            self.assertEqual(json.loads(file.read_text(encoding="utf-8")), {"owned": True})
+            self.assertEqual(self.control.extended(file), str(file))
+        finally:
+            if file.exists():
+                file.unlink()
+            if b.exists():
+                b.rmdir()
+            if a.exists():
+                a.rmdir()
+
     def test_auth(self):
         self.post("status", code=403, headers={"Authorization": "Bearer wrong"})
         self.post("status", code=403, headers={"Origin": "https://example.invalid"})
         self.post("status", code=403, headers={"Host": "localhost:" + str(self.owner.server.server_port)})
         self.post("not-a-route", code=404)
         self.assertEqual(self.owner.state["model_state"], "stopped")
+
+    def test_journal_link(self):
+        journal = self.out / "控制轨迹.jsonl"
+        saved = journal.with_suffix(".saved")
+        target = self.root / "不得修改的轨迹.txt"
+        target.write_text("keep", encoding="utf-8")
+        journal.rename(saved)
+        try:
+            os.link(target, journal)
+            with self.assertRaisesRegex(ValueError, "普通独立文件"):
+                self.owner.save()
+            self.assertEqual(target.read_text(encoding="utf-8"), "keep")
+        finally:
+            journal.unlink(missing_ok=True)
+            saved.rename(journal)
+
+    def test_journal_symlink(self):
+        journal = self.out / "控制轨迹.jsonl"
+        saved = journal.with_suffix(".saved")
+        target = self.root / "不存在的轨迹.txt"
+        journal.rename(saved)
+        try:
+            try:
+                journal.symlink_to(target)
+            except OSError as err:
+                self.skipTest("系统不允许创建测试符号链接：" + str(err))
+            with self.assertRaisesRegex(ValueError, "普通独立文件"):
+                self.owner.save()
+            self.assertFalse(target.exists(), "不得沿断开的符号链接写入")
+        finally:
+            journal.unlink(missing_ok=True)
+            saved.rename(journal)
 
     def test_workspace(self):
         a = self.root / "题目 A"
@@ -113,6 +164,11 @@ class Controller(unittest.TestCase):
             self.assertEqual(cfg["plugins"][0]["options"]["controller"], self.owner.connection())
         self.post("select", {"context": "128"}, code=409)
         self.assertEqual(self.owner.state["context"], "32")
+        text = (self.out / "控制轨迹.jsonl").read_text(encoding="utf-8")
+        rows = [json.loads(line) for line in text.splitlines()]
+        self.assertTrue(any(row["context"] == "64" for row in rows))
+        self.assertEqual(rows[-1]["context"], "32")
+        self.assertNotIn(self.owner.secret, text)
 
     def test_unconfigured(self):
         self.post("start", code=409)
@@ -181,12 +237,16 @@ class Controller(unittest.TestCase):
 
     def test_start_failure(self):
         self.prepared()
+        self.owner.state["runtime_context"] = {"verified": True, "physical_context": 32768}
+        self.owner.state["engine_release"] = {"version": "old-generation"}
         self.post("start")
         self.settle()
         self.assertEqual(self.owner.state["model_state"], "failed")
         self.assertIn("64K已签名组件尚未完整安装", self.owner.state["error"])
         self.assertTrue(self.owner.state["cleanup"]["native_stopped"])
         self.assertIsNone(self.runtime.engine.native)
+        self.assertNotIn("runtime_context", self.owner.state, "不得沿用上轮已核验状态")
+        self.assertNotIn("engine_release", self.owner.state)
         self.assertIsNone(self.owner.monitor, "签名门禁之前不得初始化GPU监控/加载")
         self.post("select", {"context": "32"})
 

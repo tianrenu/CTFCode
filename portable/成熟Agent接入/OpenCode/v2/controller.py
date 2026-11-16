@@ -9,11 +9,22 @@ import json
 import os
 from pathlib import Path
 import secrets
+import subprocess
 import sys
 import threading
 import time
 
 import psutil
+
+
+def extended(value):
+    """仅对本轮元数据目录启用Win32长路径；不改注册表或搬动程序/模型。"""
+    full = str(Path(value).resolve())
+    if os.name != "nt" or full.startswith("\\\\?\\"):
+        return full
+    if full.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + full[2:]
+    return "\\\\?\\" + full
 
 
 class Controller:
@@ -53,6 +64,12 @@ class Controller:
 
     def save(self):
         self.state["updated_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        journal = self.out / "控制轨迹.jsonl"
+        if journal.is_symlink() or journal.exists() and (not journal.is_file() or journal.stat().st_nlink != 1):
+            raise ValueError("本轮控制轨迹不是普通独立文件")
+        with journal.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(self.state, ensure_ascii=False) + "\n")
+            stream.flush()
         self.runtime.safety.write(self.out / "会话状态.json", self.state)
         self.runtime.safety.write(self.runtime.HERE / "当前运行.json", self.state)
 
@@ -170,6 +187,8 @@ class Controller:
                 raise RuntimeError("模型文件尚未准备好；请选择已准备的目录，未加载或下载模型")
             self.generation += 1
             self.state.update(model_state="loading", generation=self.generation, error=None, native_pid=None, native_created=None)
+            self.state.pop("runtime_context", None)
+            self.state.pop("engine_release", None)
             self.runtime.engine.abort.clear()
             self.save()
             self.thread = threading.Thread(target=self.load, name="ctf-owned-model", daemon=True)
@@ -203,9 +222,18 @@ class Controller:
             engine.ENV = self.runtime.context_environment(context, self.env)
             for key, suffix in (("STRATA_RUNTIME_DIR", "state/runtime"), ("STRATA_PROFILE_DIR", "state/profiles"),
                                 ("STRATA_LAUNCH_PRESET_DIR", "state/launch-presets")):
-                engine.ENV[key] = str(out / suffix)
-            (out / "settings.json").write_bytes((self.runtime.BASE / "settings.json").read_bytes())
+                engine.ENV[key] = extended(out / suffix)
+            installation = out / "installation"
+            prepared = subprocess.run([sys.executable, "-I", "-X", "utf8", str(Path(__file__).with_name("prepared.py")),
+                "--source", str(self.runtime.BASE / "runtime/control-0.1.52"), "--model", self.state["model_directory"],
+                "--out", str(installation), "--context", str(context["physical_context"])],
+                env=engine.ENV, capture_output=True, text=True, encoding="utf-8", timeout=30, creationflags=engine.FLAGS)
+            if prepared.returncode:
+                raise RuntimeError(prepared.stderr[-3000:] or "本轮模型运行配置未准备好；未调用安装器")
+            self.runtime.safety.write(out / "准备运行配置.json", json.loads(prepared.stdout))
+            self.runtime.safety.write(out / "settings.json", {"data_dir": self.state["model_directory"], "installs": [str(installation)]})
             engine.ENV.update(STRATA_SETTINGS_FILE=str(out / "settings.json"), STRATA_WS_GUARD_DIR=str(out),
+                              STRATA_INSTALL_DIR=str(installation),
                               STRATA_WS_GUARD_SECONDS="14400", STRATA_OWNER_PID=str(os.getpid()),
                               STRATA_OWNER_CREATED=str(self.state["owner_created"]))
             engine.deadline = time.monotonic() + 14400
@@ -268,6 +296,8 @@ class Controller:
                 raise RuntimeError("模型或工作集保护尚未退出")
             with self.mutex:
                 self.state.update(native_pid=None, native_created=None, guard_pid=None)
+                self.state.pop("runtime_context", None)
+                self.state.pop("engine_release", None)
         except Exception as err:
             errors.append(str(err))
         if errors:

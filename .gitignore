@@ -28,6 +28,7 @@ opencode-dev
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
+/script/__pycache__/
 
 # CTFCode本机整合材料，不进入GitHub或发布包
 /整合材料/
