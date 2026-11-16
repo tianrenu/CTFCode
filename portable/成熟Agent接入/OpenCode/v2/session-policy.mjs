@@ -35,7 +35,7 @@ export async function archive(client, id) {
   return save(dir, { session: { ...data.info, directory: dir }, messages: data.messages });
 }
 
-export function policy(ctx, opts) {
+export function policy(ctx, opts, render = () => {}) {
   let pending = false;
   async function fresh(value, initial = false) {
     if (pending) throw new Error("正在切换目录，请等待当前操作结束");
@@ -61,7 +61,7 @@ export function policy(ctx, opts) {
       if (info.parentID || info.location?.directory !== dir || info.id === previous)
         throw new Error("原生新会话的身份或目录异常，未切换界面");
       await ctx.data.session.sync(info.id);
-      if (opts.controller) await control(opts, "workspace", { directory: dir, session: info.id });
+      if (opts.controller) render(await control(opts, "workspace", { directory: dir, session: info.id }));
       ctx.ui.router.navigate({ type: "session", sessionID: info.id });
       return { session: info, archive: saved };
     } finally {

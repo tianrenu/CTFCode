@@ -129,22 +129,7 @@ def main(argv=None):
         write(ROOT / "local.json", {"model": str(path.resolve())})
         print("已保存本包模型位置；未修改旧工具箱、桌面版或全局配置。")
         return 0
-    path = model()
-    if args[:1] == ["ui"] and "--dry-run" not in args and "--native" not in args and not ready(path):
-        if not sys.stdin.isatty():
-            raise RuntimeError("尚未配置模型；先使用 setup --model <模型目录> --prepare")
-        print("便携包已含 CLI、定制插件、Python、Strata 及引擎。模型权重须单独下载。")
-        value = input("输入已有模型目录（内部应有 IQ1_M；回车取消）：").strip().strip('"')
-        if not value:
-            return 0
-        path = Path(value).expanduser()
-        if not path.is_absolute() or not path.is_dir():
-            raise ValueError("模型目录必须是已存在的绝对目录")
-        configure(path)
-        if not ready(path):
-            prepare(path)
-        write(ROOT / "local.json", {"model": str(path.resolve())})
-    configure(path)
+    configure(model())
     import toolbox
     return toolbox.main(args)
 

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "version": "2.3.0-ctfcode.1",
+  "version": "2.3.0-ctfcode.2",
   "channel": "ctfcode",
   "upstream": {
     "version": "2.3.0",
@@ -16,15 +16,23 @@
   },
   "patch": {
     "path": "patches/ctfcode-v2.3.0.patch",
-    "sha256": "36c1e7513aef4280f5602e699c6d8ce21f4d094da10a019b2821161fc1898011",
+    "sha256": "64ee01c9aaf2cdadfa0b4175e17496a922bb08b4ef4023298cbe2f8c6d5b0941",
     "files": {
       "packages/core/src/instructions/builtins.ts": {
         "before": "2cf42ae08ea7dc52120e4cde1ac9acf55c705bc12313a93ccb031e5e7636fb3e",
         "after": "d2a4d49e7a0a2b865c1c54502606e258995b821792885e5f72469004b2079b3e"
       },
+      "packages/core/src/session/model-request.ts": {
+        "before": "2a7b1730cb7b222347bec4b3bfbd7143574f1960ccec68ca3dff736ab36321ab",
+        "after": "9edacee29b7d042c2cdc39e093167ed58cd2d02056e313bddd497c700baedfdf"
+      },
       "packages/core/test/instructions/builtins.test.ts": {
         "before": "57369ce4ed5f2f4339157926253eff6177b673f39aa6352e4004c23ed2ff8d82",
         "after": "e6d9f79be623ee27ba5c2c2bf0b331e335da9358252d943e7406517aa6e778d5"
+      },
+      "packages/core/test/session-model-request.test.ts": {
+        "before": "bf90ba042918991f70dabdf90fc9b2c1207439b34e6459a7e2024e07700544eb",
+        "after": "acddda0085ee8c4e916861d38f9b54eb327c98e447b9a142d11aa11dcfa6a957"
       },
       "packages/tui/src/component/prompt/autocomplete.tsx": {
         "before": "61acbb7a08f508f6c33a19b53379e2a19c0f7256ca3dcc54f850a56075cadffe",

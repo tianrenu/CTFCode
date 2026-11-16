@@ -1,4 +1,4 @@
-"""独立V2 TUI先启动，模型按需加载；正式切换前仅由显式 --native 启用。"""
+"""独立CTFCode TUI先启动，模型按需加载；不读取或恢复历史上下文。"""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +26,7 @@ def module(name, path):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="CTFCode原生TUI（隔离预览）")
+    parser = argparse.ArgumentParser(description="CTFCode原生TUI")
     parser.add_argument("--cli")
     parser.add_argument("--target")
     parser.add_argument("--context", choices=("32", "64"), default="32")
@@ -67,6 +67,7 @@ def main(argv=None):
     owner = Controller(runtime, boot, settings, out, context=args.context)
     job = None
     child = None
+    deadline = None
     try:
         options = settings.make(cfg, HERE, sys.executable)["plugins"][0]["options"]
         options["controller"] = owner.connection()
@@ -84,8 +85,17 @@ def main(argv=None):
             owner.save()
         while child.poll() is None:
             if (out / "停止测试").exists():
-                child.terminate()
-                break
+                if deadline is None:
+                    deadline = time.monotonic() + 180
+                    with owner.mutex:
+                        owner.state["exit_requested"] = True
+                        owner.save()
+                if time.monotonic() > deadline:
+                    with owner.mutex:
+                        owner.state["exit_error"] = "TUI未完成正常退出；已请求强制清理，最后一段归档未认证"
+                        owner.save()
+                    child.terminate()
+                    break
             if runtime.engine.abort.is_set() and owner.state["model_state"] == "ready":
                 with owner.mutex:
                     owner.state["error"] = "；".join(runtime.engine.abort_reason) or "本轮资源保护触发，正在卸载模型"
@@ -94,7 +104,7 @@ def main(argv=None):
         code = child.wait(timeout=15)
         with owner.mutex:
             owner.state["exit_code"] = code
-        return code
+        return 1 if owner.state.get("exit_error") else code
     finally:
         # 正常退出先完成插件归档；意外退出由Windows作业收回本轮CLI进程树。
         # 无论CLI清理是否成功，均须继续尝试本控制器拥有的模型/守护清理。

@@ -1,7 +1,7 @@
 // 原生TUI控制中心；目录/模型/档位操作在这里执行，不进入模型上下文。
 import { control, describe } from "./control.mjs";
 
-export function center(ctx, opts, policy, flush) {
+export function center(ctx, opts, policy, flush, render = () => {}) {
   let pending = false;
   let previous;
   const fail = (err) => ctx.ui.toast.show({ title: "CTFCode", message: err.message, variant: "error" });
@@ -13,6 +13,7 @@ export function center(ctx, opts, policy, flush) {
     const deadline = Date.now() + 90000;
     while (true) {
       const state = await control(opts, "status");
+      render(state);
       if (!["loading", "stopping"].includes(state.model_state)) {
         if (state.cleanup_error) throw new Error(state.cleanup_error);
         return state;
@@ -38,6 +39,7 @@ export function center(ctx, opts, policy, flush) {
     pending = true;
     try {
       const state = await control(opts, "status");
+      render(state);
       const action = input?.trim() || await ctx.ui.dialog.select({ title: "CTFCode · 本地模型控制中心",
         placeholder: "选择操作；所有设置只影响这套独立CLI", options: [
           { title: "查看真实状态 / 资源自检", value: "status", description: state.model_state + " · " + state.context + "K" },
@@ -85,13 +87,20 @@ export function center(ctx, opts, policy, flush) {
     checking = true;
     try {
       const state = await control(opts, "status");
+      render(state);
+      if (state.exit_requested) {
+        await halt();
+        ctx.keymap.dispatch("app.exit");
+        return;
+      }
       if (previous && state.model_state !== previous && (["ready", "failed"].includes(state.model_state) || state.model_state === "stopped" && state.error))
         ctx.ui.toast.show({ title: "CTFCode · 模型状态", message: state.model_state === "ready" ?
           "模型已就绪，现在可以发送题目。" : (state.error ?? "加载失败；请用 /ctf 查看原因"),
           variant: state.model_state === "ready" ? "success" : "error", duration: 10000 });
       previous = state.model_state;
-    } catch {
-      // 仅在用户主动查看时展示连接错误，避免掉线时每两秒弹同一错误。
+    } catch (err) {
+      // 持续显示“未知”，不把连接失败当成停止，也不每两秒弹一次错误。
+      render({ connection_error: err.message });
     } finally {
       checking = false;
     }

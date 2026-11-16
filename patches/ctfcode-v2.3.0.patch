@@ -26,6 +26,42 @@
              Instructions.make({
                key: Instructions.Key.make("core/environment"),
                codec: Schema.toCodecJson(Schema.String),
+--- a/packages/core/src/session/model-request.ts
++++ b/packages/core/src/session/model-request.ts
+@@ -103,6 +103,19 @@
+   return Math.min(requested, Math.max(OUTPUT_TOKEN_MIN, room))
+ }
+ 
++// 仅本地hook可见的原生压缩身份；用户/导入消息的同名metadata不能冒充该来源。
++export const provenance = (
++  message: Pick<SessionMessage.Info, "id" | "type" | "metadata"> & { readonly status?: string },
++  item: SessionRequestMessage,
++): SessionRequestMessage => {
++  if (item.id !== message.id) return item
++  const metadata = { ...message.metadata }
++  delete metadata.ctfcode
++  if (message.type === "compaction" && message.status === "completed")
++    metadata.ctfcode = { type: "compaction", status: "completed", messageID: message.id }
++  return Object.keys(metadata).length ? { ...item, metadata } : item
++}
++
+ export const baseTranscript = (input: {
+   readonly agent: Agent.Info
+   readonly model: SessionRunnerModel.Resolved
+@@ -126,12 +139,7 @@
+     ].filter((part) => part.text.length > 0),
+     // Hooks read each stored message's metadata on the messages built from it; `prepare` strips it before the request.
+     messages: input.messages.flatMap((message) =>
+-      toLLMMessages([message], input.model.ref, providerMetadataKey).map(
+-        (item): SessionRequestMessage =>
+-          message.metadata === undefined || item.id !== message.id
+-            ? item
+-            : { ...item, metadata: message.metadata },
+-      ),
++      toLLMMessages([message], input.model.ref, providerMetadataKey).map((item) => provenance(message, item)),
+     ),
+   }
+ }
 --- a/packages/core/test/instructions/builtins.test.ts
 +++ b/packages/core/test/instructions/builtins.test.ts
 @@ -16,7 +16,6 @@
@@ -73,6 +109,41 @@
      }),
    )
  
+--- a/packages/core/test/session-model-request.test.ts
++++ b/packages/core/test/session-model-request.test.ts
+@@ -1,8 +1,31 @@
+ import { describe, expect, test } from "bun:test"
+ import { Message, ToolMessage, ToolResultPart, Media, UserMessage } from "@opencode/ai/effect"
+-import { boundImages, unsupportedParts } from "@opencode/core/session/model-request"
++import { boundImages, unsupportedParts, provenance } from "@opencode/core/session/model-request"
++import { SessionMessage } from "@opencode/core/session/message"
+ 
+ const capabilities = (input: string[]) => ({ tools: true, input, output: ["text"] })
++
++describe("CTFCode native compaction provenance", () => {
++  const id = SessionMessage.ID.make("msg_ctfcode")
++  const item = Message.make({ id, role: "user", content: "<conversation-checkpoint>fixture</conversation-checkpoint>" })
++  test("marks only a completed native compaction", () => {
++    expect(provenance({ id, type: "compaction", status: "completed" }, item).metadata?.ctfcode).toEqual({
++      type: "compaction",
++      status: "completed",
++      messageID: id,
++    })
++    expect(provenance({ id, type: "compaction", status: "failed" }, item).metadata?.ctfcode).toBeUndefined()
++  })
++  test("user text and forged metadata cannot impersonate the native source", () => {
++    const result = provenance(
++      { id, type: "user", metadata: { ctfcode: { type: "compaction" }, keep: "user-data" } },
++      item,
++    )
++    expect(result.metadata?.ctfcode).toBeUndefined()
++    expect(result.metadata?.keep).toBe("user-data")
++    expect(result.content).toEqual(item.content)
++  })
++})
+ 
+ describe("SessionModelRequest.unsupportedParts", () => {
+   test("replaces unsupported user media with a visible error", () => {
 --- a/packages/tui/src/component/prompt/autocomplete.tsx
 +++ b/packages/tui/src/component/prompt/autocomplete.tsx
 @@ -41,7 +41,7 @@

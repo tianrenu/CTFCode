@@ -5,6 +5,7 @@ import { inspectPythonSource } from "../ctf-tools.mjs";
 import Compaction from "../ctf-compaction.mjs";
 import { createCompactionTransport } from "../compaction-cache.mjs";
 import { control } from "./control.mjs";
+import { activity } from "./activity.mjs";
 
 const descriptions = {
   shell: "执行本机PowerShell命令。带引号程序路径用&调用；不使用Bash heredoc。复杂代码先write保存脚本，再单独执行并读取产物。默认120秒，最多600秒，不使用后台命令或无限超时。普通分析免逐条确认，高风险操作仍按权限审批，不得换工具绕过。大输出过滤或落盘。",
@@ -127,5 +128,6 @@ export default {
       event.result.content = typeof event.result.content === "string" ? event.result.content + note :
         [...(event.result.content ?? []), { type: "text", text: note }];
     });
+    return activity(ctx, opts);
   },
 };

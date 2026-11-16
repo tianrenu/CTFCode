@@ -1,18 +1,20 @@
 // V2 TUI 插件：覆盖原生命令的策略，不向模型增加工具 schema 或提示词。
 import { policy, archive } from "./session-policy.mjs";
 import { center } from "./ctf-center.mjs";
+import { display } from "./status.mjs";
 
 export default {
   id: "ctfcode.tui",
   async setup(ctx) {
-    const state = policy(ctx, ctx.options);
+    const banner = display(ctx);
+    const state = policy(ctx, ctx.options, banner.update);
     const [memory, update] = ctx.storage.memory("boot", { initial: { started: false } });
     const fail = (err) => ctx.ui.toast.show({ title: "CTFCode", message: err.message, variant: "error" });
     const flush = async () => {
       const route = ctx.ui.router.current();
       if (route.type === "session") await archive(ctx.client, route.sessionID);
     };
-    const menu = center(ctx, ctx.options, state, flush);
+    const menu = center(ctx, ctx.options, state, flush, banner.update);
     let timer;
     const unwatch = ctx.data.listen(({ details }) => {
       const route = ctx.ui.router.current();
@@ -56,6 +58,7 @@ export default {
     }
     return async () => {
       menu.close();
+      banner.close();
       unwatch();
       clearTimeout(timer);
       await flush();

@@ -88,6 +88,8 @@ class Controller:
     def idle(self):
         if self.closed:
             raise RuntimeError("控制器已退出")
+        if self.state.get("exit_requested"):
+            raise RuntimeError("正在归档并退出，不能再加载或修改模型")
         if self.state.get("cleanup_error"):
             raise RuntimeError("上轮清理尚未成功，请先停止并核验；不能再加载或更改模型")
         if self.thread and self.thread.is_alive() or self.state["model_state"] in ("loading", "ready", "stopping"):
@@ -128,20 +130,48 @@ class Controller:
 
     def workspace(self, value):
         with self.mutex:
+            if self.state.get("exit_requested"):
+                raise RuntimeError("正在归档并退出，未切换工作目录")
             if self.closed or self.state["model_state"] in ("loading", "stopping"):
                 raise RuntimeError("模型正在加载/卸载，请等待后再切换目录")
             if set(value) != {"directory", "session"} or not isinstance(value["directory"], str) or not isinstance(value["session"], str) or not value["session"].startswith("ses_") or len(value["session"]) > 128:
                 raise ValueError("工作区交接缺少有效新会话")
             directory = self.runtime.validate_workspace(value["directory"])
-            self.state.update(workspace=str(directory), session=value["session"])
+            self.state.update(workspace=str(directory), session=value["session"], task=None)
             key = hashlib.sha256(value["session"].encode()).hexdigest()[:32]
             self.state["activity_directory"] = str(self.out / "sessions" / key)
             Path(self.state["activity_directory"]).mkdir(parents=True, exist_ok=True)
             self.save()
             return copy.deepcopy(self.state)
 
+    def activity(self, value):
+        with self.mutex:
+            if self.closed or set(value) != {"session", "directory", "data"} or value["session"] != self.state["session"] or value["directory"] != self.state["workspace"]:
+                raise ValueError("任务状态不属于当前会话/目录；没有覆盖新任务")
+            data = value["data"]
+            phases = {"idle", "queued", "running", "request", "generating", "tool", "compacting", "waiting_permission",
+                      "needs_attention", "progress_gate", "succeeded", "failed", "interrupted"}
+            if not isinstance(data, dict) or data.get("phase") not in phases or data.get("semantic_result_verified") is not False:
+                raise ValueError("原生任务状态格式无效；不能把退出成功当作答案正确")
+            if set(data) - {"phase", "step", "tools", "failures", "pending", "last_tool", "reason", "outcome", "observed_utc", "progress", "audit_error", "semantic_result_verified"}:
+                raise ValueError("任务状态不能修改模型或进程身份")
+            for key in ("step", "tools", "failures", "pending"):
+                if type(data.get(key)) is not int or not 0 <= data[key] <= 100000:
+                    raise ValueError("任务计数无效")
+            if len(json.dumps(data, ensure_ascii=False).encode("utf-8")) > 4096:
+                raise ValueError("任务状态超过4096字节")
+            directory = Path(self.state["activity_directory"])
+            if directory.is_symlink() or directory.resolve() != directory:
+                raise ValueError("任务状态目录包含重定向")
+            self.runtime.safety.write(directory / "Agent状态.json", data)
+            self.state["task"] = copy.deepcopy(data)
+            self.save()
+            return {"saved": True}
+
     def ready(self, value):
         with self.mutex:
+            if self.state.get("exit_requested"):
+                raise RuntimeError("正在停止并归档当前会话，未发送新模型请求")
             if self.closed or self.state["model_state"] != "ready" or not self.runtime.engine.same_native():
                 raise RuntimeError("模型尚未就绪；请在 /ctf 中启动并查看真实加载状态")
             if value.get("session") != self.state["session"] or value.get("directory") != self.state["workspace"]:
@@ -345,7 +375,7 @@ class Controller:
         self.server.server_close()
         self.http.join(5)
         with self.mutex:
-            self.state["state"] = "failed" if self.state.get("cleanup_error") else "stopped"
+            self.state["state"] = "failed" if self.state.get("cleanup_error") or self.state.get("exit_error") else "stopped"
             self.save()
         if self.state.get("cleanup_error"):
             raise RuntimeError("清理失败；未释放模型独占锁：" + self.state["cleanup_error"])
@@ -372,7 +402,7 @@ class Controller:
                         raise ValueError("控制器请求必须是对象")
                     routes = {"/status": lambda: owner.status(resources=bool(value.get("resources"))),
                               "/select": lambda: owner.select(value), "/workspace": lambda: owner.workspace(value),
-                              "/ready": lambda: owner.ready(value), "/start": owner.start, "/stop": owner.stop}
+                              "/ready": lambda: owner.ready(value), "/activity": lambda: owner.activity(value), "/start": owner.start, "/stop": owner.stop}
                     if self.path not in routes:
                         self.reply(404, {"ok": False, "error": "控制器操作不存在"})
                         return

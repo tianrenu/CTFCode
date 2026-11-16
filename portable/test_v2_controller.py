@@ -170,6 +170,36 @@ class Controller(unittest.TestCase):
         self.assertEqual(rows[-1]["context"], "32")
         self.assertNotIn(self.owner.secret, text)
 
+    def test_activity(self):
+        work = self.root / "状态测试题目"
+        work.mkdir()
+        self.post("workspace", {"directory": str(work), "session": "ses_activity_a"})
+        data = {"phase": "succeeded", "step": 1, "tools": 2, "failures": 0, "pending": 0, "semantic_result_verified": False}
+        body = {"session": "ses_activity_a", "directory": str(work), "data": data}
+        self.post("activity", body)
+        state = self.post("status")["data"]
+        self.assertEqual(state["model_state"], "stopped", "任务结束不等于模型加载或卸载")
+        self.assertEqual(state["task"], data)
+        ui = module("controller_toolbox", self.package / "toolbox.py")
+        self.assertEqual(ui.agent_activity(state)["说明"], "本轮结束，答案未经认证")
+        file = Path(state["activity_directory"]) / "Agent状态.json"
+        self.assertEqual(json.loads(file.read_text(encoding="utf-8")), data)
+        self.post("activity", {**body, "data": {**data, "semantic_result_verified": True}}, code=409)
+        self.post("activity", {**body, "data": {**data, "native_pid": 123}}, code=409)
+        self.post("workspace", {"directory": str(work), "session": "ses_activity_b"})
+        self.assertIsNone(self.post("status")["data"]["task"])
+        self.post("activity", body, code=409)
+        self.assertEqual(json.loads(file.read_text(encoding="utf-8")), data, "旧任务状态留在原会话，不能覆盖新会话")
+
+    def test_exit(self):
+        self.owner.state["exit_requested"] = True
+        self.assertIn("归档并退出", self.post("start", code=409)["error"])
+        self.assertIn("归档", self.post("ready", code=409)["error"])
+        self.post("select", {"context": "64"}, code=409)
+        self.post("workspace", {"directory": str(self.root), "session": "ses_exit"}, code=409)
+        self.assertTrue(self.post("status")["data"]["exit_requested"])
+        self.post("stop")
+
     def test_unconfigured(self):
         self.post("start", code=409)
         work = self.root / "空白题目"
@@ -263,7 +293,7 @@ class Controller(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("CTFCODE_V2_CLI"), "须显式提供隔离V2 CLI，不使用桌面/全局CLI")
     def test_launch(self):
         result = subprocess.run([sys.executable, "-I", "-X", "utf8", str(self.package / "bootstrap.py"),
-            "ui", "--native", "--cli", os.environ["CTFCODE_V2_CLI"], "--dry-run", "--context", "64"],
+            "ui", "--cli", os.environ["CTFCODE_V2_CLI"], "--dry-run", "--context", "64"],
             capture_output=True, text=True, encoding="utf-8", timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)

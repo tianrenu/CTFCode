@@ -155,7 +155,7 @@ class ProgressTracker {
         entries = await fs.readdir(folder, { withFileTypes: true });
       } catch (e) { if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(e.code)) { result.complete = false; return; } throw e; }
       for (const ent of entries) {
-        if ([".ctf-evidence", ".git", "node_modules"].includes(ent.name)) continue;
+        if ([".ctf-evidence", ".ctfcode", ".git", "node_modules"].includes(ent.name)) continue;
         if (++count > 256) { result.complete = false; return; }
         const p = path.join(folder, ent.name);
         if (ent.isSymbolicLink()) { result.complete = false; continue; }

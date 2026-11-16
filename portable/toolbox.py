@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import datetime as dt
+import hashlib
 import json
 import math
 import os
@@ -39,6 +40,19 @@ def owner_alive(state):
 
 def agent_activity(state):
     """读取当前控制器的状态旁路；历史记录不能冒充正在运行。"""
+    if 'model_state' in state:
+        data=dict(state.get('task') or {})
+        words={'idle':'待输入','queued':'请求已提交','running':'处理中','request':'等待模型首字',
+               'generating':'正在生成','tool':'正在执行工具','compacting':'正在压缩上下文',
+               'waiting_permission':'等待操作审批','needs_attention':'需要人工处理','progress_gate':'等待调整步骤',
+               'succeeded':'本轮结束，答案未经认证','failed':'任务失败','interrupted':'任务已停止'}
+        data['说明']=words.get(data.get('phase','idle'),'状态未知，不能据此认定停止或解出')
+        data['tool_calls']=data.get('tools',0)
+        data['tool_failures']=data.get('failures',0)
+        data['state']=data.get('phase','idle')
+        data['semantic_result_verified']=False
+        # 原始回执在当前题目目录；这里只展示本轮控制器已绑定的摘要，不读取旧会话。
+        return data
     out=Path(state['out']).resolve()
     if not out.is_relative_to(BASE.resolve()/'会话记录'):
         raise ValueError('活动状态目录越界')
@@ -135,25 +149,34 @@ def latest_completed_request(metrics):
 
 
 def check(as_json=False,menu=False):
-    cfg=runtime.config()
+    state=read_status()
+    alive=bool(state and owner_alive(state))
+    cfg=runtime.config_for_context(runtime.config(),state.get('context') if alive else None)
     context=runtime.context_profile(cfg)
     model=Path(os.environ.get('CTFCODE_MODEL_DIR', str(BASE/'models/GSQ-RCO-Coder'))).resolve()
     required=[runtime.EXE,OPEN_CODE/'opencode_engine.py',OPEN_CODE/'opencode_safety.py',
-              OPEN_CODE/'ctf-context.mjs',OPEN_CODE/'ctf-tools.mjs',
+              OPEN_CODE/'v2/ctf-tui.mjs',OPEN_CODE/'v2/ctf-server.mjs',OPEN_CODE/'v2/activity.mjs',
+              OPEN_CODE/'v2/journal.mjs',OPEN_CODE/'v2/status.mjs',OPEN_CODE/'v2/cli.json',OPEN_CODE/'ctf-tools.mjs',
               BASE/'working_set_guard.py',BASE/'runtime/control-0.1.52/python/python.exe',
               BASE/'runtime/control-0.1.52/strata.py',BASE/'strata-feed.json',BASE/'strata-feed.json.sig',
               model/'IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf',
               model/'IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf',
               model/'packs/coder-iq1_m/experts.bin',model/'packs/coder-iq1_m/dense.bin']
     missing=[str(p) for p in required if not p.is_file()]
-    state=read_status()
-    alive=bool(state and owner_alive(state))
     report={'runtime_files_ready':not missing,'missing':missing,'model':'GSQ-RCO Coder IQ1_M',
             'model_directory':str(model),'endpoint':'http://127.0.0.1:18791/v1',
             'physical_context':context['physical_context'],'soft_context':context['soft_context'],
             'configured_context':context,'running_context':None,'context_fields_scope':'配置值，不是当前实测运行窗口',
             'kv':'q4_0','prefill':128,'vram_reserve_mib':1792,
             'controller_running':alive,'session':state if alive else None}
+    try:
+        release=json.loads((OPEN_CODE/'v2/cli.json').read_text(encoding='utf-8'))
+        with runtime.EXE.open('rb') as stream:
+            if hashlib.file_digest(stream,'sha256').hexdigest()!=release['sha256']:
+                raise ValueError('包内CLI哈希不符；不会执行原版或未知程序')
+        report['cli']={'verified':True,'version':release['version'],'sha256':release['sha256']}
+    except (OSError,ValueError,KeyError) as ex:
+        report['cli']={'verified':False,'error':str(ex)}
     cfg64=runtime.config_for_context(cfg,'64')
     release64=runtime.engine_release(runtime.context_profile(cfg64))
     optional=[OPEN_CODE/name for name in ('ctf-context-64k.mjs','ctf-compaction.mjs','compaction-cache.mjs','64K摘要输出约束_分词器.json')]
@@ -174,6 +197,7 @@ def check(as_json=False,menu=False):
     if alive:
         try:report['agent_activity']=agent_activity(state)
         except Exception as ex:report['agent_activity_error']=str(ex)
+    if alive and state.get('model_state','ready')=='ready':
         try:
             metrics=runtime.engine.SESSION.get('http://127.0.0.1:18791/metrics',timeout=2).json()
             report['running_context']=runtime.observed_context(state,metrics)
@@ -193,7 +217,7 @@ def check(as_json=False,menu=False):
                 report.pop('process_gpu_memory',None)
                 raise ValueError('采样期间引擎已变化')
         except Exception as ex:report['process_gpu_memory_error']=str(ex)
-    else:report['live_note']='当前未运行本工具箱模型；文件检查不等于已加载或解题验证。'
+    else:report['live_note']='当前未加载本工具箱模型；TUI运行、文件齐全均不等于模型正在推理。'
     try:
         report['ollama_loaded_models']=runtime.engine.SESSION.get('http://127.0.0.1:11434/api/ps',timeout=2).json().get('models',[])
     except Exception:report['ollama_loaded_models']=None
@@ -207,11 +231,12 @@ def check(as_json=False,menu=False):
     else:
         print('=== 本地AI自检（只读） ===')
         print('运行文件：'+('齐全' if not missing else '缺失，不能启动'))
+        print('独立CLI：'+(report['cli']['version']+'（SHA256匹配）' if report['cli']['verified'] else report['cli']['error']))
         print('PowerShell内置模块：'+('已优先使用本机版本，避免混入PowerShell7模块' if report['powershell_environment']['native_modules_first'] else '原生模块路径未置首，请核对所用shell；自检不修改系统环境'))
         for item in missing:print('  缺失：'+item)
         print(f"模型：GSQ-RCO Coder IQ1_M | 下次启动配置：物理{context['physical_context']//1024}K / 软{context['soft_context']//1024}K | 127.0.0.1:18791")
         print(f"配置自动摘要阈值约{context['automatic_compaction_at_approx']//1024}K；{context['hc_projection']}。不是实际解题质量保证。")
-        print('3号启动可选32K或64K（仅本次）；64K仍是HC Q8候选，冷输入很慢，未认证长期稳定。')
+        print('3号直接进入独立TUI，/cd打开题目，/ctf选择模型和32K/64K；64K仍为候选。')
         print(f"单次模型请求总超时{context['request_timeout_ms']//60000}分钟；冷读期间看下方输入进度，可随时取消，并非要固定等待这么久。")
         observed=report.get('running_context')
         print('当前实测运行窗口：'+(f"物理{observed['physical_context']//1024}K（身份/argv/服务已核对）" if observed else '尚未确认，不使用配置值代替'))
@@ -228,6 +253,7 @@ def check(as_json=False,menu=False):
         if report.get('development_probe_note'):print(report['development_probe_note'])
         if alive:
             print('题目目录：'+str(state.get('workspace','未知')))
+            print('模型驻留状态：'+str(state.get('model_state','未知'))+'；控制器运行不代表模型已加载。')
             activity=report.get('agent_activity',{})
             print('Agent：'+activity.get('说明',activity.get('note','尚无活动信息')))
             if activity.get('artifact_review_available'):print('产物链检查点已就绪：输出已读回，内容仍待核验；即使模型还在输出，也可以先查看产物。')
@@ -262,10 +288,10 @@ def check(as_json=False,menu=False):
         print('整卡显存：'+str(report.get('whole_gpu') or report.get('gpu_error') or '未知'))
         print('注意：空闲/停止/正常退出均不代表题目已解出；以结果验证为准。')
     if menu and not as_json and sys.stdin.isatty() and not os.environ.get('TOOLBOX_NO_PAUSE'):
-        hint='S：停止本工具箱模型；'
+        hint='S：关闭本包会话并卸载模型（仅卸载模型请在TUI用/ctf stop）；'
         choice=input('\n'+hint+'直接回车不更改：').strip().lower()
         if choice=='s':return stop_owned()
-    return 1 if missing else 0
+    return 1 if missing or not report['cli']['verified'] else 0
 
 
 def main(argv=None):
@@ -273,46 +299,19 @@ def main(argv=None):
     sub=parser.add_subparsers(dest='command',required=True)
     ui=sub.add_parser('ui');ui.add_argument('--target');ui.add_argument('--dry-run',action='store_true')
     ui.add_argument('--context',choices=('32','64'),help='仅本次启动的上下文档位；不改持久配置')
-    ui.add_argument('--native',action='store_true',help='显式试用原生V2 TUI；尚未替换默认入口')
-    ui.add_argument('--cli',help='仅原生预览：已核验的独立2.3.0 CLI路径')
+    ui.add_argument('--native',action='store_true',help=argparse.SUPPRESS)
+    ui.add_argument('--cli',help='已核验的独立CTFCode CLI路径；默认使用包内程序')
     status=sub.add_parser('check');status.add_argument('--json',action='store_true');status.add_argument('--menu',action='store_true');status.add_argument('--stop',action='store_true')
     sub.add_parser('stop')
     args=parser.parse_args(argv)
     if args.command=='stop' or args.command=='check' and args.stop:return stop_owned()
     if args.command=='check':return check(args.json,args.menu)
-    if args.native:
-        import importlib.util
-        spec=importlib.util.spec_from_file_location('ctf_native_launch',OPEN_CODE/'v2/launch.py')
-        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-        return module.main((["--target",args.target] if args.target else [])+
-            (["--context",args.context] if args.context else [])+(["--cli",args.cli] if args.cli else [])+
-            (["--dry-run"] if args.dry_run else []))
-    if args.cli:raise ValueError('--cli仅用于显式--native预览，不影响原入口')
-    target=args.target or input('请输入/拖入独立题目副本目录（回车取消，不加载模型）：').strip().strip('"')
-    if not target:return 0
-    if args.context is None and not args.dry_run and sys.stdin.isatty():
-        default=runtime.context_profile(runtime.config())['physical_context']//1024
-        choice=input(f'本次上下文32/64，回车沿用默认{default}K；64K仍是HC Q8候选、长冷输入很慢：').strip()
-        if choice and choice not in ('32','64'):raise ValueError('上下文只接受32或64；未加载模型')
-        args.context=choice or None
-    if args.dry_run:
-        cfg=runtime.config_for_context(runtime.config(),args.context)
-        workspace=runtime.preflight(target,cfg)
-        p=subprocess.run([str(runtime.EXE),'debug','config'],cwd=workspace,env=runtime.child_env(cfg),capture_output=True,timeout=30,creationflags=runtime.engine.FLAGS)
-        if p.returncode:raise RuntimeError(p.stderr.decode('utf-8','replace'))
-        actual=json.loads(p.stdout)
-        if actual.get('enabled_providers')!=['strata-local'] or actual.get('model')!=runtime.MODEL:
-            raise ValueError('独立CLI实际配置不符')
-        context=runtime.context_profile(actual)
-        if context != runtime.context_profile(cfg):raise ValueError('独立CLI实际上下文档与启动配置不符')
-        print(json.dumps({'dry_run':True,'model_not_loaded':True,'workspace':str(workspace),
-                          'cli_version':'1.2.26','actual_model':actual['model'],
-                          'configured_context':context,'argv':runtime.context_argv(cfg,'oc-ui-dryrun'),
-                          'hc_model_child_environment':context['hc_environment'],
-                          'selected_engine':runtime.engine_release(context),
-                          'selected_plugins':cfg['plugin']},ensure_ascii=False,indent=2))
-        return 0
-    return runtime.launch(target,context_k=args.context)
+    import importlib.util
+    spec=importlib.util.spec_from_file_location('ctf_native_launch',OPEN_CODE/'v2/launch.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    return module.main((["--target",args.target] if args.target else [])+
+        (["--context",args.context] if args.context else [])+(["--cli",args.cli] if args.cli else [])+
+        (["--dry-run"] if args.dry_run else []))
 
 
 if __name__=='__main__':

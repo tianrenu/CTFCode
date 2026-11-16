@@ -118,7 +118,7 @@ def main(argv=None):
             "--filter", "@opencode/cli", "--filter", "@opencode/core", "--filter", "@opencode/tui", "--filter", "@opencode/script",
             "--network-concurrency=8")
         report["dependencies_installed"] = True
-        run("core-tests", source / "packages/core", "test", "test/instructions/builtins.test.ts")
+        run("core-tests", source / "packages/core", "test", "test/instructions/builtins.test.ts", "test/session-model-request.test.ts")
         run("tui-tests", source / "packages/tui", "test", "test/prompt/autocomplete.test.ts", "test/util/presentation.test.ts",
             "test/app-lifecycle.test.tsx", "--timeout", "30000")
         for name in ("core", "tui", "cli"):
