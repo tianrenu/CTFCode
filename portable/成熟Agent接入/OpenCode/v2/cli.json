@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "version": "2.3.0-ctfcode.1",
+  "sha256": "56569aaf27ccae2f7eec77d5bd844289735876126d05bfb5dd161fdd7c0d8df7",
+  "upstream": "2.3.0",
+  "commit": "a6b15d33daf6ab7d35569f6d711fdb630b9f04e7",
+  "source_sha256": "327af8ce7f5538036e9b49aaefd1d644dc6d739c8c4a3c7b6c71d0bb8ece6a79",
+  "features": ["no-automatic-date", "literal-cd-submit", "archive-not-resume"],
+  "scope": "CTFCode独立CLI；不是桌面版、不是完整迁移验收证明"
+}

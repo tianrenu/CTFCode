@@ -1,0 +1,2 @@
+patches/ctfcode-v2.3.0.patch text eol=lf -whitespace
+script/native-lock.json text eol=lf

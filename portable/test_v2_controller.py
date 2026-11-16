@@ -267,10 +267,21 @@ class Controller(unittest.TestCase):
             capture_output=True, text=True, encoding="utf-8", timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
+        self.assertEqual(data["version"], json.loads((self.here / "v2/cli.json").read_text(encoding="utf-8"))["version"])
         self.assertTrue(data["model_not_loaded"])
         self.assertTrue(data["standalone"])
         self.assertIsNone(data["startup"], "无题目目录也能先打开TUI")
         self.assertEqual(data["context"]["physical_context"], 65536)
+        self.assertIsNone(self.runtime.engine.native)
+
+    def test_cli_hash(self):
+        file = self.root / "invalid.exe"
+        file.write_bytes(b"not an executable; must never run")
+        result = subprocess.run([sys.executable, "-I", "-X", "utf8", str(self.package / "bootstrap.py"),
+            "ui", "--native", "--cli", str(file), "--dry-run"],
+            capture_output=True, text=True, encoding="utf-8", timeout=30)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("不是已核验的CTFCode定制构建", result.stderr)
         self.assertIsNone(self.runtime.engine.native)
 
 

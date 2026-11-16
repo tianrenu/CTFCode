@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "version": "2.3.0-ctfcode.1",
+  "channel": "ctfcode",
+  "upstream": {
+    "version": "2.3.0",
+    "commit": "a6b15d33daf6ab7d35569f6d711fdb630b9f04e7",
+    "url": "https://codeload.github.com/anomalyco/opencode/legacy.tar.gz/refs/tags/v2.3.0",
+    "sha256": "327af8ce7f5538036e9b49aaefd1d644dc6d739c8c4a3c7b6c71d0bb8ece6a79"
+  },
+  "bun": {
+    "version": "1.4.4",
+    "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-windows-x64.zip",
+    "archive_sha256": "cd2c0fccc78f3ede1f50ca827a15f063eda13d4d150a3d0674f4f6e323d864a5",
+    "executable_sha256": "cb1d8e6564e655e49d30cead359750a1cbbd12f42651caa4b62244d7bd93c244"
+  },
+  "patch": {
+    "path": "patches/ctfcode-v2.3.0.patch",
+    "sha256": "36c1e7513aef4280f5602e699c6d8ce21f4d094da10a019b2821161fc1898011",
+    "files": {
+      "packages/core/src/instructions/builtins.ts": {
+        "before": "2cf42ae08ea7dc52120e4cde1ac9acf55c705bc12313a93ccb031e5e7636fb3e",
+        "after": "d2a4d49e7a0a2b865c1c54502606e258995b821792885e5f72469004b2079b3e"
+      },
+      "packages/core/test/instructions/builtins.test.ts": {
+        "before": "57369ce4ed5f2f4339157926253eff6177b673f39aa6352e4004c23ed2ff8d82",
+        "after": "e6d9f79be623ee27ba5c2c2bf0b331e335da9358252d943e7406517aa6e778d5"
+      },
+      "packages/tui/src/component/prompt/autocomplete.tsx": {
+        "before": "61acbb7a08f508f6c33a19b53379e2a19c0f7256ca3dcc54f850a56075cadffe",
+        "after": "336cfa948ecb8d29dbc102f7e9eb4e5eb285da3ffff311a0310150d62a95eddf"
+      },
+      "packages/tui/src/prompt/directory-completion.ts": {
+        "before": "6978b638ec95361cd0ad3635f9ecb4fd82bb1b892b6a218a26f40b45d831b342",
+        "after": "ddf28e1433ced9de35776e2c1255c8346e6ff7c14f4a238a7164cd4bd2e6d2b6"
+      },
+      "packages/tui/src/util/presentation.ts": {
+        "before": "fe5d0d96cae8e33ed947942b1df018aa9495297e9713fbb3bc7ede5bf042194e",
+        "after": "ad73b06aefc80161c48c975ec81d3e99cb1d161b2e25d7c4b7c08fb7ff9afd6c"
+      },
+      "packages/tui/test/app-lifecycle.test.tsx": {
+        "before": "aa8b246b1fdd72fd5ac98a2f8fc435d9d8d00b13d42a38313e450af0d957ce1c",
+        "after": "21d90684991da7267279b3fa33d1eda84d734e3ff22ec9d0b94fdd4923a118c0"
+      },
+      "packages/tui/test/prompt/autocomplete.test.ts": {
+        "before": "59df8f1924a51f8578d113e22a1689fa0b81a020d8f5befc42bfb98313fbd4c4",
+        "after": "08fc7b8d081e1bb1c3fa06bd08526bde85ce528d682f57a0b95c92af05ab0865"
+      },
+      "packages/tui/test/util/presentation.test.ts": {
+        "before": "12245d3a7490129a33f5320a8446c6ced73fd02aaf063b97ae04a60e03c7c7ad",
+        "after": "828398280d17eb0bf0bd5346c11fc543741f98715cad96e5d1c4bb59cbf91242"
+      }
+    }
+  }
+}

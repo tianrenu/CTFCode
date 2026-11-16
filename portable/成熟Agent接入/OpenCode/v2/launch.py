@@ -40,9 +40,12 @@ def main(argv=None):
     cli = Path(args.cli).resolve() if args.cli else HERE / "程序/opencode.exe"
     if not cli.is_file() or cli.is_symlink():
         raise FileNotFoundError("独立V2 CLI缺失；未回退桌面版或全局CLI")
+    release = json.loads(Path(__file__).with_name("cli.json").read_text(encoding="utf-8"))
+    if release.get("format") != 1 or release.get("upstream") != "2.3.0" or not release.get("version", "").startswith("2.3.0-ctfcode.") or len(release.get("sha256", "")) != 64:
+        raise ValueError("CTFCode独立CLI构建声明无效")
     with cli.open("rb") as stream:
-        if hashlib.file_digest(stream, "sha256").hexdigest() != "38153a142354634c82b5cfe6c00b19df15a71e6cf8c17ef5f5c1a4cc684a6917":
-            raise ValueError("V2 CLI不是已核验的2.3.0程序；未启动或联网升级")
+        if hashlib.file_digest(stream, "sha256").hexdigest() != release["sha256"]:
+            raise ValueError("V2 CLI不是已核验的CTFCode定制构建；未启动或联网升级")
     cfg = runtime.config_for_context(runtime.config(), args.context)
     env = runtime.child_env(cfg)
     env.pop("OPENCODE_CONFIG_CONTENT", None)
@@ -52,11 +55,11 @@ def main(argv=None):
                OPENCODE_DISABLE_FILEWATCHER="true")
     version = subprocess.run([str(cli), "--version"], env=env, capture_output=True, text=True,
                              timeout=15, creationflags=runtime.engine.FLAGS)
-    if version.returncode or version.stdout.strip() != "opencode v2.3.0":
+    if version.returncode or version.stdout.strip() != "opencode v" + release["version"]:
         raise RuntimeError("独立V2 CLI版本不符")
     startup = str(runtime.validate_workspace(args.target)) if args.target else None
     if args.dry_run:
-        print(json.dumps({"dry_run": True, "model_not_loaded": True, "cli": str(cli), "version": "2.3.0",
+        print(json.dumps({"dry_run": True, "model_not_loaded": True, "cli": str(cli), "version": release["version"],
             "startup": startup, "context": runtime.context_profile(cfg), "standalone": True,
             "configuration": settings.make(cfg, HERE, sys.executable)}, ensure_ascii=False, indent=2))
         return 0

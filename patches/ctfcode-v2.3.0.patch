@@ -1,0 +1,277 @@
+--- a/packages/core/src/instructions/builtins.ts
++++ b/packages/core/src/instructions/builtins.ts
+@@ -1,7 +1,7 @@
+ export * as InstructionBuiltIns from "./builtins.js"
+ 
+ import { makeLocationNode } from "@opencode/util/effect/app-node"
+-import { Context, DateTime, Effect, Layer, Schema } from "effect"
++import { Context, Effect, Layer, Schema } from "effect"
+ import { Global } from "@opencode/util/global"
+ import { Location } from "../location.js"
+ import { Instructions } from "./index.js"
+@@ -21,15 +21,7 @@
+       load: () =>
+         Effect.succeed(
+           Instructions.combine([
+-            Instructions.make({
+-              key: Instructions.Key.make("core/date"),
+-              codec: Schema.toCodecJson(Schema.String),
+-              read: DateTime.nowAsDate.pipe(Effect.map((date) => date.toDateString())),
+-              render: {
+-                initial: (date) => `Today's date: ${date}`,
+-                changed: (_previous, date) => `Today's date is now: ${date}`,
+-              },
+-            }),
++            // CTFCode按题目新建会话；不注入日期，也不在跨午夜时追加日期通知。
+             Instructions.make({
+               key: Instructions.Key.make("core/environment"),
+               codec: Schema.toCodecJson(Schema.String),
+--- a/packages/core/test/instructions/builtins.test.ts
++++ b/packages/core/test/instructions/builtins.test.ts
+@@ -16,7 +16,6 @@
+ const projectDirectory = AbsolutePath.make(FSUtil.resolve("/repo"))
+ const timestamp = Date.parse("2026-06-03T12:00:00.000Z")
+ const temporary = os.tmpdir()
+-const localDate = (time: number) => new Date(time).toDateString()
+ const locationLayer = Layer.succeed(
+   Location.Service,
+   Location.Service.of(
+@@ -34,7 +33,7 @@
+ )
+ 
+ describe("InstructionBuiltIns", () => {
+-  it.effect("loads location-scoped environment and host-local date instructions", () =>
++  it.effect("loads location-scoped environment without an automatic date", () =>
+     Effect.gen(function* () {
+       yield* TestClock.setTime(timestamp)
+       const context = yield* InstructionBuiltIns.Service
+@@ -42,8 +41,6 @@
+ 
+       expect(initialized.text).toBe(
+         [
+-          `Today's date: ${localDate(timestamp)}`,
+-          "",
+           "Here is some useful information about the environment you are running in:",
+           "<env>",
+           `  Working directory: ${directory}`,
+@@ -57,7 +54,7 @@
+     }),
+   )
+ 
+-  it.effect("updates the date without repeating unchanged environment instructions", () =>
++  it.effect("does not inject an instruction update across midnight", () =>
+     Effect.gen(function* () {
+       yield* TestClock.setTime(timestamp)
+       const context = yield* InstructionBuiltIns.Service
+@@ -66,7 +63,8 @@
+       yield* TestClock.setTime(timestamp + 24 * 60 * 60 * 1000)
+       const refreshed = yield* readUpdate(yield* context.load(), initialized)
+ 
+-      expect(refreshed.text).toBe(`Today's date is now: ${localDate(timestamp + 24 * 60 * 60 * 1000)}`)
++      expect(refreshed.text).toBe("")
++      expect(refreshed.changed).toBe(false)
+     }),
+   )
+ 
+--- a/packages/tui/src/component/prompt/autocomplete.tsx
++++ b/packages/tui/src/component/prompt/autocomplete.tsx
+@@ -41,7 +41,7 @@
+ import { stringWidth } from "../../util/string-width"
+ import { parseFileLineRange, stripFileLineRange } from "../../prompt/parse"
+ import { moveSelection, reconcileSelectionWindow, revealSelectionOffset } from "../../ui/select-controller"
+-import { directoryAutocomplete, slashArgumentAutocomplete } from "../../prompt/directory-completion"
++import { directoryAutocomplete, directorySubmit, slashArgumentAutocomplete } from "../../prompt/directory-completion"
+ 
+ export type AutocompleteRef = {
+   onInput: (value: string) => void
+@@ -724,6 +724,13 @@
+         title: "Select autocomplete item",
+         group: "Autocomplete",
+         run() {
++          // 完整/cd参数用Enter提交原文，Tab仍用于补全，不用先Esc关闭候选列表。
++          if (store.visible === "directory" && directorySubmit(props.input().plainText)) {
++            setDismissedValue(props.input().plainText)
++            hide()
++            queueMicrotask(() => keymap.dispatch("prompt.submit"))
++            return
++          }
+           select()
+         },
+       },
+--- a/packages/tui/src/prompt/directory-completion.ts
++++ b/packages/tui/src/prompt/directory-completion.ts
+@@ -51,12 +51,21 @@
+ }
+ 
+ export function directoryAutocompleteSearch(query: string, directory: string, home: string) {
++  query = query
++    .trim()
++    .replace(/^"(.*)"$/s, "$1")
++    .replaceAll("\\", "/")
+   if (query === "~") return { directory: home, prefix: "~/", query: "" }
+   if (query.startsWith("~/")) return directorySearch(query.slice(2), home, "~/")
+   if (/^(?:\.\.\/)*\.\.$/.test(query))
+     return { directory: path.resolve(directory, query), prefix: query + "/", query: "" }
+   if (query.startsWith("/")) return directorySearch(query.slice(1), path.parse(directory).root, "/")
+   return directorySearch(query, directory, "")
++}
++
++export function directorySubmit(value: string) {
++  const head = parseSlashHead(value, /\s/)
++  return head?.name === "cd" && Boolean(head.arguments.trim())
+ }
+ 
+ function directorySearch(query: string, root: string, prefix: string) {
+--- a/packages/tui/src/util/presentation.ts
++++ b/packages/tui/src/util/presentation.ts
+@@ -36,7 +36,12 @@
+       ? [`  ${dim}Run ${reset}${bold}opencode${reset}${dim} to use ${reset}${bold}${input.updatedVersion}${reset}`, ""]
+       : []),
+     ...(input.session
+-      ? [row("Session", input.session.title), row("Continue", `opencode -s ${input.session.sessionID}`), ""]
++      ? [
++          row("本次会话", input.session.title),
++          "  历史记录请在原工作目录的 .ctfcode/会话归档 中查阅。",
++          "  下次启动新建空白会话，不自动恢复历史上下文。",
++          "",
++        ]
+       : []),
+   ].join("\n")
+ }
+--- a/packages/tui/test/app-lifecycle.test.tsx
++++ b/packages/tui/test/app-lifecycle.test.tsx
+@@ -369,7 +369,8 @@
+     await task
+ 
+     expect(stdout).toContain("Renamed session")
+-    expect(stdout).toContain("opencode -s dummy")
++    expect(stdout).not.toContain("opencode -s dummy")
++    expect(stdout).toContain("下次启动新建空白会话")
+     expect(promptRequests).toBe(0)
+   } finally {
+     process.stdout.write = originalWrite
+@@ -1389,10 +1390,10 @@
+ 
+ test.skipIf(process.platform === "win32").each(["manual", "select"] as const)(
+   "selection copy and pane management respect %s mode in the prompt and terminal pane",
+-    async (copy) => {
+-      await using state = await tmpdir()
+-      const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
+-      await setup.renderer.setupTerminal()
++  async (copy) => {
++    await using state = await tmpdir()
++    const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
++    await setup.renderer.setupTerminal()
+     setup.renderer.start()
+     const ready = Promise.withResolvers<void>()
+     const session = {
+@@ -1986,9 +1987,7 @@
+   setup.mockInput.pressEnter()
+   await setup.waitForFrame((frame) => frame.includes("GOGO-1234"))
+   expect(openSpy).toHaveBeenCalledWith("https://opencode.ai/go")
+-  expect(oauthRequests).toEqual([
+-    { methodID: "device", answer: { server: "https://opencode.ai/console" } },
+-  ])
++  expect(oauthRequests).toEqual([{ methodID: "device", answer: { server: "https://opencode.ai/console" } }])
+   const connectFrame = setup.captureCharFrame()
+   expect(connectFrame).toContain("OpenCode Console account")
+   expect(connectFrame).not.toContain("Enter Go API key")
+@@ -2277,7 +2276,13 @@
+     created: 6,
+     type: "session.step.started",
+     durable: { aggregateID: session.id, seq: 6, version: 1 },
+-    data: { sessionID: session.id, assistantMessageID: "msg_free_assistant_expired", agent: "build", model, started: 6 },
++    data: {
++      sessionID: session.id,
++      assistantMessageID: "msg_free_assistant_expired",
++      agent: "build",
++      model,
++      started: 6,
++    },
+   })
+   setup.events.emit({
+     id: "evt_free_limit_expired_fail",
+@@ -2844,4 +2849,3 @@
+   },
+   15_000,
+ )
+-
+--- a/packages/tui/test/prompt/autocomplete.test.ts
++++ b/packages/tui/test/prompt/autocomplete.test.ts
+@@ -9,6 +9,7 @@
+   directoryAutocompleteResultValue,
+   directoryAutocompleteSearch,
+   directoryRecentValue,
++  directorySubmit,
+   slashArgumentAutocomplete,
+ } from "../../src/prompt/directory-completion"
+ 
+@@ -107,6 +108,18 @@
+ })
+ 
+ describe("directoryAutocompleteSearch", () => {
++  test("normalizes quoted Windows paths and home backslashes", () => {
++    expect(directoryAutocompleteSearch('"E:\\CTF 题目\\附件"', "E:/work", "E:/home")).toEqual({
++      directory: path.resolve("E:/CTF 题目"),
++      prefix: "E:/CTF 题目/",
++      query: "附件",
++    })
++    expect(directoryAutocompleteSearch("~\\tasks", "/project", "/home/user")).toEqual({
++      directory: "/home/user",
++      prefix: "~/",
++      query: "tasks",
++    })
++  })
+   test("searches from home after a home prefix", () => {
+     expect(directoryAutocompleteSearch("~", "/project", "/home/user")).toEqual({
+       directory: "/home/user",
+@@ -164,6 +177,17 @@
+   })
+ })
+ 
++describe("directorySubmit", () => {
++  test.each(['/cd "E:\\CTF 题目\\附件"', "/cd ~/other-project", "/cd ../next", "/cd\t中文"])(
++    "submits the literal directory argument %j",
++    (value) => expect(directorySubmit(value)).toBe(true),
++  )
++  test.each(["/cd", "/cd ", "/ctf start", "/other next", "please /cd next"])(
++    "does not submit %j as a directory",
++    (value) => expect(directorySubmit(value)).toBe(false),
++  )
++})
++
+ describe("directoryAutocompleteResultValue", () => {
+   test("preserves explicit roots", () => {
+     expect(
+--- a/packages/tui/test/util/presentation.test.ts
++++ b/packages/tui/test/util/presentation.test.ts
+@@ -10,10 +10,11 @@
+   expect(epilogue({})).toBeUndefined()
+ })
+ 
+-test("formats session continuation summary", () => {
++test("shows the archive location instead of a resume command", () => {
+   expect(rows(epilogue({ session: { title: "A session", sessionID: "ses_123" } }))).toEqual([
+-    "  Session   A session",
+-    "  Continue  opencode -s ses_123",
++    "  本次会话      A session",
++    "  历史记录请在原工作目录的 .ctfcode/会话归档 中查阅。",
++    "  下次启动新建空白会话，不自动恢复历史上下文。",
+   ])
+ })
+ 
+@@ -21,10 +22,11 @@
+   expect(rows(epilogue({ updatedVersion: "2.0.0" }))).toEqual(["  Run opencode to use 2.0.0"])
+ })
+ 
+-test("keeps the session continuation after an update", () => {
++test("keeps the fresh-session policy after an update", () => {
+   expect(rows(epilogue({ session: { title: "A session", sessionID: "ses_123" }, updatedVersion: "2.0.0" }))).toEqual([
+     "  Run opencode to use 2.0.0",
+-    "  Session   A session",
+-    "  Continue  opencode -s ses_123",
++    "  本次会话      A session",
++    "  历史记录请在原工作目录的 .ctfcode/会话归档 中查阅。",
++    "  下次启动新建空白会话，不自动恢复历史上下文。",
+   ])
+ })
