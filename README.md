@@ -1,159 +1,63 @@
-# CTFCode（Windows 便携测试版）
+<p align="center"><img src="launcher/logo.svg" width="88" alt="CTFCode" /></p>
 
-面向本地CTF的独立OpenCode TUI + Strata + GSQ-RCO Coder IQ1_M整合项目。便携包自带源码编译的定制CLI、Python、两档引擎和分析依赖，TUI内统一换目录、空白会话、归档、模型与上下文控制。已完成参考机器的真实生成、重载、压缩、取消及退出验收；不等于近满64K长期稳定或另一台电脑已验收。
+# CTFCode · 本地 CTF 工作台
 
-> **正常使用请下载 [v0.1.0-preview.3 windows-x64便携包](https://github.com/tianrenu/CTFCode/releases/tag/v0.1.0-preview.3)，不要只下载Source code，也不需要另外安装原版OpenCode。** 模型权重约58.4GB，另行下载或复用已有目录；首次只有GGUF时按指南准备一次pack。解压后运行 `3_CTF做题界面.bat`，用 `/cd` 打开题目、`/ctf` 管理模型；不能只拖出EXE，否则会绕过定制层。
+**独立 OpenCode TUI + Strata + GSQ-RCO Coder IQ1_M。** 把本地模型、题目目录、运行状态和会话归档放进同一个终端工作台，不再让下载用户拼一堆脚本。
 
-**从这里开始：[便携版使用](docs/便携版使用.md)** · [模型下载与校验](docs/模型下载与校验.md) · [完整部署资料](docs/README.md) · [迁移与验收状态](docs/定制层迁移状态.md)
+> **[下载 Windows x64 便携包 · preview.4](https://github.com/tianrenu/CTFCode/releases/tag/v0.1.0-preview.4)**
+>
+> 下载 `CTFCode-v0.1.0-preview.4-windows-x64.zip`，不是 Source code。完整解压后双击 **`CTFCode.exe`**。不必另装原版 OpenCode、Python、Bun 或 npm；模型权重另下。
 
-本版使用从OpenCode 2.3.0源码编译的 `2.3.0-ctfcode.2`，不是将原版EXE改名。每次打开/切换目录或 `/new` 都新建空白会话，旧记录留在原题目目录，不自动恢复。本机原3/7号入口已经切换并验收；过程中的失败、修复与最终结果见[收尾验收](docs/TUI整合进度.md)。64K仍是显式候选，不承诺恒定10+ token/s或独立解出所有CTF题目。
+[使用指南](docs/便携版使用.md) · [模型下载与校验](docs/模型下载与校验.md) · [引擎版本与来源](docs/引擎下载与配置.md) · [构建与验收](docs/TUI整合进度.md)
 
-旧的 [v0.1.0-preview.1](docs/发布说明.md) 只是源码/文档预览，不含定制层。当前便携测试版带入了定制，不应把旧版或手动基础连接教程当作本版安装方案。
+## 打开之后是什么？
 
-指南明确列出模型两个分片及 Strata Control/32K/64K 引擎的固定版本、官方/镜像直链、大小和 SHA256，并提供不影响桌面版的独立 CLI 配置。权重、引擎二进制及本机会话不随源码发布。
+直接进入原生 TUI 开始页，而不是另一个外部目录输入脚本或 Web 做题台：
 
-以下为 OpenCode 上游介绍；保留原作者署名和 [MIT 许可证](LICENSE)。
+| 开始页步骤 | 做什么 |
+| --- | --- |
+| ① 配置本地模型 | 选择已有模型目录，原地复用，不搬运权重 |
+| ② 校验与准备 | 首次只有两个GGUF时，在界面里确认校验并准备pack；可看进度、报错和取消 |
+| ③ 打开题目文件夹 | 新建空白会话，旧记录独立保存在原题目目录 |
+| ④ 启动本地模型 | 按需加载；状态、上下文与资源都在同一TUI内管理 |
 
----
+小型 `CTFCode.exe` 有独立源码、项目图标和版本信息，约11KB，不是把原版OpenCode改名。原3/7号BAT仅为旧用户保留兼容，不再是对外主入口。
 
-<p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
-</p>
+## 日常操作
 
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
+| 操作 | 命令 |
+| --- | --- |
+| 开始页 / 控制中心 | `/ctf setup` / `/ctf` |
+| 加载 / 停止并卸载 | `/ctf start` / `/ctf stop` |
+| 32K默认 / 64K候选 | `/ctf 32` / `/ctf 64` |
+| 换题 / 同目录换方向 | `/cd "题目完整路径"` / `/new` |
+| 准备进度 / 自检 | `/ctf progress` / `/ctf status` |
+| 正常归档退出 | `/exit` |
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+每次打开、切换或重开目录都从空白上下文开始，不自动恢复旧消息。旧会话留在原目录的 `.ctfcode/会话归档`，可人工查阅；附件、脚本与成果不删除。切换时的目录或归档检查失败会明确报错，不静默丢记录。
 
----
+## 包里有什么，还缺什么？
 
-### Installation
+- **已包含：** 源码编译的定制 OpenCode `2.3.0-ctfcode.2`、CTF插件与控制器、Python、Strata Control、32K/64K两档签名引擎、pefile/Capstone/Unicorn和许可。
+- **另下：** 模型IQ1_M两个分片，合计约58.4GB；[指南](docs/模型下载与校验.md)给出固定revision、官方/镜像直链、大小和SHA256。已有完整目录可直接复用。
+- **不包含：** 权重、packs、本机设置、会话、赛题、解题成果与测试日志。
 
-```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
+整个文件夹必须保持完整，不要单独移动EXE。当前未作代码签名，请核验发布页SHA256和来源；本项目不要求关闭系统防护或绕过安全提示。
 
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
-```
+## 适用范围与真实边界
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
+参考机器：Windows x64、RTX 5060 Laptop 8GB、32GB RAM、SSD。需要兼容NVIDIA驱动；启动器使用受支持Windows 10/11内置.NET Framework 4.x，无需.NET SDK。保留单模型、RAM/VRAM/工作集与进程树保护，不关闭其他应用，不修改桌面版OpenCode，服务端口18791不占用Burp的8080。
 
-### Desktop App (BETA)
+- 参考机器已验证32K真实生成、脚本执行/读回、卸载重载，64K短生成与运行中停止，以及压缩后续聊、退出归档与空白新会话。
+- 本轮入口回归：Python60通过/2跳过，Node46通过/1跳过；实际从新便携布局启动EXE并操作原生开始页，正常退出。
+- **64K仍是候选。** 不承诺近满窗口长期稳定、恒定10+ token/s或复杂CTF独立解题。
+- 另一台干净电脑的首次58.4GB完整pack准备尚未实测；首次准备失败/取消回归不等于这项成功。
+- 权限规则不是OS沙箱。仅用于授权环境；未知PE应在虚拟机或受限仿真中分析，不直接运行。
 
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
+## 源码、构建与致谢
 
-| Platform              | Download                              |
-| --------------------- | ------------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `opencode-desktop-darwin-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, or AppImage           |
+[定制CLI构建](docs/定制CLI构建.md)记录上游固定版本、补丁、编译器与SHA256；`script/launcher.py`构建小型入口，`script/portable.py`白名单生成便携包。二进制只作为Release资产，不提交模型或本机文件。
 
-```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
-```
+本项目基于[OpenCode](https://github.com/anomalyco/opencode)，保留原作者署名与[MIT许可证](LICENSE)。仓库历史源码快照为1.2.26；实际定制CLI由构建锁从2.3.0源码编译，不能把旧源码树误当作当前EXE构建版本。模型、Strata、CUDA与分析依赖分别遵守其许可，见指南与包内 `licenses/`。
 
-#### Installation Directory
-
-The install script respects the following priority order for the installation path:
-
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
-
-```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
-```
-
-### Agents
-
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
-
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
-
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
-
-Learn more about [agents](https://opencode.ai/docs/agents).
-
-### Documentation
-
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
-
-### Contributing
-
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-### Building on OpenCode
-
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
-
-### FAQ
-
-#### How is this different from Claude Code?
-
-It's very similar to Claude Code in terms of capability. Here are the key differences:
-
-- 100% open source
-- Not coupled to any provider. Although we recommend the models we provide through [OpenCode Zen](https://opencode.ai/zen), OpenCode can be used with Claude, OpenAI, Google, or even local models. As models evolve, the gaps between them will close and pricing will drop, so being provider-agnostic is important.
-- Out-of-the-box LSP support
-- A focus on TUI. OpenCode is built by neovim users and the creators of [terminal.shop](https://terminal.shop); we are going to push the limits of what's possible in the terminal.
-- A client/server architecture. This, for example, can allow OpenCode to run on your computer while you drive it remotely from a mobile app, meaning that the TUI frontend is just one of the possible clients.
-
----
-
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+旧preview.1/2/3发布与失败记录保留，不覆盖。完整部署资料见[文档索引](docs/README.md)。

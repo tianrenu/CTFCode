@@ -56,12 +56,12 @@ def config_for_context(source, context_k=None):
     return cfg
 
 
-def owned_job(ledger):
+def owned_job(ledger, *, process_mib=2048, total_mib=3072):
     """新建CLI专用Windows作业；引擎不在此作业中，不附着其他应用。"""
     import importlib.util
     spec=importlib.util.spec_from_file_location('ctf_owned_process_job',HERE/'owned_process_job.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-    return module.OwnedProcessJob(process_mib=2048,total_mib=3072,max_processes=16,ledger=ledger)
+    return module.OwnedProcessJob(process_mib=process_mib,total_mib=total_mib,max_processes=16,ledger=ledger)
 
 
 def context_profile(cfg):

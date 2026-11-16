@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parent
 BASE = ROOT / "本地模型配置与日志/Strata验证"
@@ -69,14 +70,23 @@ def configure(path):
 
 def verify(path):
     cfg = json.loads((BASE / "官方模型哈希.json").read_text(encoding="utf-8"))
-    for file in cfg["files"]:
+    for index, file in enumerate(cfg["files"], 1):
         item = path / file["path"]
         if not item.is_file() or item.is_symlink() or item.stat().st_size != file["bytes"]:
             raise ValueError("缺少正确大小的模型分片：" + str(item))
         print("核验 SHA256：" + item.name, flush=True)
+        sha = hashlib.sha256()
+        count = 0
+        previous = 0
         with item.open("rb") as stream:
-            if hashlib.file_digest(stream, "sha256").hexdigest() != file["sha256"]:
-                raise ValueError("模型 SHA256 不符，不继续准备或加载：" + str(item))
+            while chunk := stream.read(8 * 1024**2):
+                sha.update(chunk)
+                count += len(chunk)
+                if time.monotonic() - previous >= 1 or count == file["bytes"]:
+                    print(f"校验分片 {index}/{len(cfg['files'])}：{count/file['bytes']:.1%} ({count}/{file['bytes']} bytes)", flush=True)
+                    previous = time.monotonic()
+        if sha.hexdigest() != file["sha256"]:
+            raise ValueError("模型 SHA256 不符，不继续准备或加载：" + str(item))
 
 
 def ready(path):
@@ -87,7 +97,21 @@ def ready(path):
         "packs/coder-iq1_m/tokenizer/vocab.json"))
 
 
+def inventory(path):
+    cfg = json.loads((BASE / "官方模型哈希.json").read_text(encoding="utf-8"))
+    missing = [file["path"] for file in cfg["files"] if not (path / file["path"]).is_file()
+               or (path / file["path"]).is_symlink() or (path / file["path"]).stat().st_size != file["bytes"]]
+    return {"weights_present": not missing, "missing_weights": missing, "pack_present": ready(path),
+            "bytes_verified": False, "scope": "文件与大小检查，不替代SHA256核验"}
+
+
 def prepare(path):
+    packs = path / "packs"
+    if packs.is_symlink() or packs.exists() and packs.resolve() != packs.absolute():
+        raise ValueError("pack目录不能包含重定向链接：" + str(packs))
+    for item in packs.rglob("*"):
+        if item.is_symlink() or item.exists() and item.resolve() != item.absolute():
+            raise ValueError("pack目录不能包含重定向链接：" + str(item))
     verify(path)
     env = {k: v for k, v in os.environ.items() if k.lower() not in ("http_proxy", "https_proxy", "all_proxy")}
     env.update(STRATA_INSTALL_DIR=str(CONTROL), STRATA_SETTINGS_FILE=str(BASE / "settings.json"),

@@ -71,6 +71,7 @@ def main(argv=None):
     try:
         options = settings.make(cfg, HERE, sys.executable)["plugins"][0]["options"]
         options["controller"] = owner.connection()
+        options["welcome"] = not startup
         if startup:
             options["startup"] = startup
         env.update(OPENCODE_CONFIG=str(owner.file), OPENCODE_CLI_CONFIG_CONTENT=json.dumps({

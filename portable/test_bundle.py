@@ -36,9 +36,15 @@ class Bundle(unittest.TestCase):
     def test_sources(self):
         self.assertNotIn("dependencies.json", bundle.SOURCES)
         self.assertNotIn("dependencies.bun.lock", bundle.SOURCES)
-        for name in ("activity.mjs", "journal.mjs", "status.mjs", "cli.json"):
+        for name in ("activity.mjs", "journal.mjs", "status.mjs", "cli.json", "welcome.mjs", "provision.py"):
             self.assertIn("成熟Agent接入/OpenCode/v2/" + name, bundle.SOURCES)
         self.assertEqual([name for name in bundle.SOURCES if name.endswith(".bat")], ["3_CTF做题界面.bat", "7_自检.bat"])
+
+    @unittest.skipUnless(os.environ.get("CTFCODE_LAUNCHER"), "需指定已编译入口")
+    def test_launcher(self):
+        cfg = bundle.launcher(os.environ["CTFCODE_LAUNCHER"])
+        self.assertEqual(cfg["version"], "0.1.0-preview.4")
+        self.assertIn("launcher/Program.cs", cfg["sources"])
 
     def test_paths(self):
         for name in ("../outside", "/outside", "C:/outside", "dir\\outside"):

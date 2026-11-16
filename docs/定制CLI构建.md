@@ -1,6 +1,12 @@
 # CTFCode独立CLI的源码与构建
 
-普通使用者下载包含定制CLI的preview.3便携包即可，不需要安装Bun或自己编译。开发源码、便携布局和本机原3/7号入口均使用独立TUI；完整通过项及保留边界见[TUI整合进度](TUI整合进度.md)。
+普通使用者下载包含定制CLI的preview.4便携包即可，不需要安装Bun或自己编译。开发源码、便携布局和本机原3/7号入口均使用独立TUI；完整通过项及保留边界见[TUI整合进度](TUI整合进度.md)。
+
+## CTFCode启动入口（不等于重编OpenCode）
+
+`launcher/Program.cs` 是约11KB的Windows控制台入口，包含产品版本与项目图标，使用包内相对路径运行Python和既有TUI。普通用户双击 `CTFCode.exe`；旧BAT保留兼容。它不安装服务、不提权、不寻找全局Python/OpenCode、不经过cmd拼接用户路径。
+
+在Windows开发环境执行 `python script/launcher.py --output <不存在的新目录>`，使用系统.NET Framework编译器生成EXE、ICO和 `launcher.json`。便携构建时提供 `--launcher <该EXE路径>`；构建器校验EXE与四个源码文件的SHA256。当前未签名；.NET Framework由受支持的Windows 10/11提供，运行时无需SDK。
 
 ## 定制内容
 

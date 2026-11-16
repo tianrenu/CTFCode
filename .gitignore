@@ -35,6 +35,7 @@ tsconfig.tsbuildinfo
 /README_整合说明.md
 /.local/
 /.runtime/
+/CTFCode.exe
 /.userdata/
 /models/
 **/*.gguf

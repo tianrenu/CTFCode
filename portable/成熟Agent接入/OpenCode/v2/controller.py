@@ -38,6 +38,7 @@ class Controller:
         self.thread = None
         self.monitor = None
         self.closed = False
+        self.unloading = False
         self.generation = 0
         self.env = dict(runtime.engine.ENV)
         self.state = {"state": "running", "model_state": "stopped", "out": str(self.out),
@@ -117,6 +118,9 @@ class Controller:
                 self.boot.configure(path)
                 self.boot.write(self.boot.ROOT / "local.json", {"model": str(path)})
                 self.cfg = cfg
+                if "model" in value:
+                    for key in ("preparation_state", "preparation_log", "preparation_pid"):
+                        self.state.pop(key, None)
                 self.state.update(context=context, model_directory=str(path), model_state="stopped", error=None)
                 self.configure()
                 self.state.pop("configuration_error", None)
@@ -132,8 +136,8 @@ class Controller:
         with self.mutex:
             if self.state.get("exit_requested"):
                 raise RuntimeError("正在归档并退出，未切换工作目录")
-            if self.closed or self.state["model_state"] in ("loading", "stopping"):
-                raise RuntimeError("模型正在加载/卸载，请等待后再切换目录")
+            if self.closed or self.state["model_state"] in ("preparing", "loading", "stopping"):
+                raise RuntimeError("模型正在准备/加载/卸载，请等待后再切换目录")
             if set(value) != {"directory", "session"} or not isinstance(value["directory"], str) or not isinstance(value["session"], str) or not value["session"].startswith("ses_") or len(value["session"]) > 128:
                 raise ValueError("工作区交接缺少有效新会话")
             directory = self.runtime.validate_workspace(value["directory"])
@@ -184,6 +188,13 @@ class Controller:
         with self.mutex:
             state = copy.deepcopy(self.state)
         state["model_files_present"] = self.boot.ready(Path(state["model_directory"]))
+        state["model_inventory"] = self.boot.inventory(Path(state["model_directory"]))
+        if state.get("preparation_log"):
+            file = Path(state["preparation_log"])
+            if file.is_file() and not file.is_symlink():
+                with file.open("rb") as stream:
+                    stream.seek(max(0, file.stat().st_size - 4096))
+                    state["preparation_tail"] = stream.read(4096).decode("utf-8", errors="replace")[-2000:]
         state["available_ram_gib"] = round(psutil.virtual_memory().available / 1024**3, 2)
         if resources:
             try:
@@ -202,6 +213,80 @@ class Controller:
             except Exception as err:
                 state["metrics_error"] = str(err)
         return state
+
+    def prepare(self, value):
+        with self.mutex:
+            if set(value) != {"confirm"} or value.get("confirm") is not True:
+                raise ValueError("准备pack会写入所选模型目录，须在TUI明确确认")
+            self.idle()
+            if self.state.get("configuration_error"):
+                raise RuntimeError("模型设置未完整保存，不能准备pack")
+            path = Path(self.state["model_directory"])
+            if self.boot.ready(path):
+                return self.status()
+            if not self.boot.inventory(path)["weights_present"]:
+                raise ValueError("模型分片缺失或大小不符；请先在向导中查看下载指南，未下载或启动任何模型")
+            if psutil.virtual_memory().available < 16 * 1024**3:
+                raise RuntimeError("准备pack需要至少16GiB可用内存；未降低资源保护或关闭其他应用")
+            self.runtime.engine.abort.clear()
+            self.state.update(model_state="preparing", preparation_state="running", error=None)
+            self.save()
+            self.thread = threading.Thread(target=self.provision, name="ctf-owned-pack", daemon=True)
+            self.thread.start()
+            return copy.deepcopy(self.state)
+
+    def provision(self):
+        job = None
+        child = None
+        try:
+            file = self.out / ("模型准备_" + dt.datetime.now().strftime("%H%M%S_%f") + ".log")
+            with file.open("xb") as stream:
+                with self.mutex:
+                    self.state["preparation_log"] = str(file)
+                    self.save()
+                job = self.runtime.owned_job(self.out / (file.stem + "_作业.jsonl"), process_mib=8192, total_mib=10240)
+                env = dict(os.environ)
+                env.update(PYTHONUTF8="1", PYTHONUNBUFFERED="1")
+                child = job.spawn([sys.executable, "-I", "-X", "utf8", "-u", str(Path(__file__).with_name("provision.py")),
+                    "--model", self.state["model_directory"]], env=env, cwd=self.boot.ROOT,
+                    stdout=stream, stderr=subprocess.STDOUT, creationflags=self.runtime.engine.FLAGS)
+                deadline = time.monotonic() + 14400
+                with self.mutex:
+                    self.state["preparation_pid"] = child.pid
+                    self.save()
+                while child.poll() is None:
+                    if self.runtime.engine.abort.wait(0.2):
+                        raise RuntimeError("已取消pack准备；部分pack保留，不会自动删除模型文件")
+                    if time.monotonic() > deadline:
+                        raise RuntimeError("pack准备超过4小时，已停止；保留日志和部分文件")
+                if self.runtime.engine.abort.is_set():
+                    raise RuntimeError("已取消pack准备；未报告准备成功")
+                if child.returncode or not self.boot.ready(Path(self.state["model_directory"])):
+                    raise RuntimeError("pack准备未完成，请查看准备日志；未加载推理模型")
+                with self.mutex:
+                    self.state.update(preparation_state="completed", error=None)
+                    if self.state["model_state"] != "stopping":
+                        self.state["model_state"] = "stopped"
+        except Exception as err:
+            with self.mutex:
+                cancelled = self.runtime.engine.abort.is_set()
+                self.state.update(preparation_state="cancelled" if cancelled else "failed", error=str(err))
+                if self.state["model_state"] != "stopping":
+                    self.state["model_state"] = "stopped" if cancelled else "failed"
+        finally:
+            try:
+                if job:
+                    result = job.close()
+                    if result["errors"] or not result["handle_closed"]:
+                        raise RuntimeError("准备进程树清理失败：" + str(result))
+                if child:
+                    child.wait(timeout=10)
+            except Exception as err:
+                with self.mutex:
+                    self.state.update(model_state="failed", cleanup_error=str(err))
+            with self.mutex:
+                self.state["preparation_pid"] = None
+                self.save()
 
     def start(self):
         with self.mutex:
@@ -326,7 +411,12 @@ class Controller:
             except Exception as err:
                 errors.append(str(err))
         try:
-            result = self.runtime.engine.stop_engine()
+            engine = self.runtime.engine
+            empty = engine.native is None and engine.guard is None and engine.launch is None
+            result = {"native_stopped": True, "guard_stopped": True, "other_apps_untouched": True,
+                      "scope": "本轮未启动引擎，无需调用Strata停止命令"} if empty else engine.stop_engine()
+            if empty:
+                self.runtime.safety.write(self.out / "未加载引擎清理.json", result)
             with self.mutex:
                 self.state["cleanup"] = result
             if not result["native_stopped"] or not result["guard_stopped"]:
@@ -344,11 +434,12 @@ class Controller:
     def stop(self):
         with self.mutex:
             self.runtime.engine.abort.set()
-            if self.state["model_state"] == "stopping" and self.thread and self.thread.is_alive():
+            if self.unloading:
                 return copy.deepcopy(self.state)
             if self.state["model_state"] not in ("ready", "loading", "stopping") and not self.state.get("cleanup_error") and not (self.thread and self.thread.is_alive()):
                 return copy.deepcopy(self.state)
             previous = self.thread
+            self.unloading = True
             self.state["model_state"] = "stopping"
             self.save()
             def unload():
@@ -366,6 +457,7 @@ class Controller:
                         self.state.update(model_state="failed", error=f"卸载失败：{err}", cleanup_error=str(err))
                 finally:
                     with self.mutex:
+                        self.unloading = False
                         self.save()
             self.thread = threading.Thread(target=unload, name="ctf-unload-model", daemon=True)
             self.thread.start()
@@ -409,7 +501,8 @@ class Controller:
                         raise ValueError("控制器请求必须是对象")
                     routes = {"/status": lambda: owner.status(resources=bool(value.get("resources"))),
                               "/select": lambda: owner.select(value), "/workspace": lambda: owner.workspace(value),
-                              "/ready": lambda: owner.ready(value), "/activity": lambda: owner.activity(value), "/start": owner.start, "/stop": owner.stop}
+                              "/ready": lambda: owner.ready(value), "/activity": lambda: owner.activity(value),
+                              "/prepare": lambda: owner.prepare(value), "/start": owner.start, "/stop": owner.stop}
                     if self.path not in routes:
                         self.reply(404, {"ok": False, "error": "控制器操作不存在"})
                         return

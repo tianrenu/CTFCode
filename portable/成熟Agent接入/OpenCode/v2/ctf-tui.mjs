@@ -8,7 +8,7 @@ export default {
   async setup(ctx) {
     const banner = display(ctx);
     const state = policy(ctx, ctx.options, banner.update);
-    const [memory, update] = ctx.storage.memory("boot", { initial: { started: false } });
+    const [memory, update] = ctx.storage.memory("boot", { initial: { started: false, welcomed: false } });
     const fail = (err) => ctx.ui.toast.show({ title: "CTFCode", message: err.message, variant: "error" });
     const flush = async () => {
       const route = ctx.ui.router.current();
@@ -56,7 +56,11 @@ export default {
       await state.fresh(ctx.options.startup, true);
       update((draft) => { draft.started = true; });
     }
+    // 原生界面挂载后再展示开始页，避免在插件setup中等待对话框造成启动死锁。
+    const welcome = ctx.options.welcome && !ctx.options.startup && !memory.welcomed ? setTimeout(() => menu.run("welcome"), 600) : undefined;
+    if (welcome) update((draft) => { draft.welcomed = true; });
     return async () => {
+      clearTimeout(welcome);
       menu.close();
       banner.close();
       unwatch();

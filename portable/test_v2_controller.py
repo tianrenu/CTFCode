@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -83,6 +84,72 @@ class Controller(unittest.TestCase):
         for path in (self.out / "会话状态.json", self.here / "当前运行.json"):
             self.assertNotIn(self.owner.secret, path.read_text(encoding="utf-8"))
         self.assertNotIn(self.owner.secret, json.dumps(data))
+
+    def test_preparation(self):
+        for body in ({}, {"confirm": False}, {"confirm": 1}, {"confirm": True, "command": "unexpected"}):
+            self.post("prepare", body, code=409)
+        self.assertIn("分片缺失", self.post("prepare", {"confirm": True}, code=409)["error"])
+        self.assertFalse(self.post("status")["data"]["model_inventory"]["weights_present"])
+        self.assertIsNone(self.owner.thread)
+        self.assertIsNone(self.runtime.engine.native)
+
+    def test_progress(self):
+        file = self.out / '准备.log'
+        file.write_text('x' * 5000 + '\n进度：50%\n', encoding='utf-8')
+        self.owner.state.update(preparation_state='running', preparation_log=str(file), model_state='preparing')
+        state = self.post('status')['data']
+        self.assertLessEqual(len(state['preparation_tail']), 2000)
+        self.assertIn('50%', state['preparation_tail'])
+        self.assertNotIn(self.owner.secret, json.dumps(state))
+        self.post('workspace', {'directory': str(self.root), 'session': 'ses_during_prepare'}, code=409)
+        self.owner.state['model_state'] = 'stopped'
+
+    def test_cancel_preparation(self):
+        # Real process-tree fixture, not real weights: exercise the production owner/cancel path.
+        file = self.here / 'v2/provision.py'
+        before = file.read_bytes()
+        marker = self.out / 'worker.json'
+        file.write_text('import json,os,subprocess,sys,time\n'
+            'from pathlib import Path\n'
+            'child=subprocess.Popen([sys.executable,"-c","import time;time.sleep(90)"])\n'
+            f'Path({str(marker)!r}).write_text(json.dumps([os.getpid(),child.pid]))\n'
+            'print("SYNTHETIC_PREPARATION_RUNNING",flush=True)\ntime.sleep(90)\n', encoding='utf-8')
+        try:
+            self.runtime.engine.abort.clear()
+            self.owner.state.update(model_state='preparing', preparation_state='running')
+            self.owner.thread = threading.Thread(target=self.owner.provision, daemon=True)
+            self.owner.thread.start()
+            deadline = time.monotonic() + 15
+            while not marker.exists():
+                self.assertLess(time.monotonic(), deadline, self.owner.state)
+                time.sleep(0.05)
+            pids = json.loads(marker.read_text())
+            self.assertIn('SYNTHETIC', self.post('status')['data']['preparation_tail'])
+            self.post('stop')
+            previous = self.owner.thread
+            self.post('stop')
+            self.assertIs(self.owner.thread, previous, '重复停止不应启动第二个并发清理线程')
+            self.settle()
+            self.assertEqual(self.owner.state['preparation_state'], 'cancelled')
+            self.assertEqual(self.owner.state['model_state'], 'stopped')
+            self.assertNotIn('cleanup_error', self.owner.state)
+            self.assertTrue(all(not self.runtime.psutil.pid_exists(pid) for pid in pids))
+            self.assertIsNone(self.runtime.engine.native)
+            self.assertTrue(marker.exists(), '取消不应删除用户或准备进程的文件')
+        finally:
+            self.post('stop')
+            self.settle()
+            file.write_bytes(before)
+
+    def test_provision_failure(self):
+        self.owner.state.update(model_state='preparing', preparation_state='running')
+        self.runtime.engine.abort.clear()
+        self.owner.provision()
+        self.assertEqual(self.owner.state['preparation_state'], 'failed')
+        self.assertEqual(self.owner.state['model_state'], 'failed')
+        self.assertIn('分片', self.post('status')['data']['preparation_tail'])
+        self.assertIsNone(self.owner.state['preparation_pid'])
+        self.assertIsNone(self.runtime.engine.native)
 
     @unittest.skipUnless(os.name == "nt", "Win32元数据长路径")
     def test_extended(self):
@@ -216,10 +283,12 @@ class Controller(unittest.TestCase):
     def test_model(self):
         path = self.root / "另一个模型目录"
         path.mkdir(exist_ok=True)
+        self.owner.state.update(preparation_state="failed", preparation_log="old-model.log")
         data = self.post("select", {"model": str(path)})["data"]
         self.assertEqual(data["model_directory"], str(path))
         self.assertEqual(self.boot.model(), path)
         self.assertFalse(data.get("model_files_present", False))
+        self.assertNotIn("preparation_log", data, "换模型不能混用旧模型的准备状态；日志文件仍保留")
         self.assertFalse(list(path.iterdir()), "选择目录不能下载或复制模型")
         self.post("select", {"model": str(self.root / "不存在")}, code=409)
         self.post("select", {"model": str(Path(path.anchor))}, code=409)

@@ -19,7 +19,8 @@ SOURCES += [f"{OC}/{name}" for name in (
     "ctf-context.mjs", "ctf-context-64k.mjs", "ctf-compaction.mjs", "compaction-cache.mjs",
     "ctf-tools.mjs", "session-archive.mjs", "opencode.json", "64K摘要输出约束_分词器.template.json")]
 SOURCES += [f"{OC}/v2/{name}" for name in ("package.json", "cli.json", "session-policy.mjs", "ctf-tui.mjs", "ctf-server.mjs",
-    "ctf-center.mjs", "control.mjs", "settings.py", "controller.py", "launch.py", "prepared.py", "status.mjs", "journal.mjs", "activity.mjs")]
+    "ctf-center.mjs", "control.mjs", "settings.py", "controller.py", "launch.py", "prepared.py", "status.mjs", "journal.mjs", "activity.mjs",
+    "welcome.mjs", "provision.py")]
 SOURCES += [f"{BASE}/{name}" for name in (
     "ctf_script_runner.py", "working_set_guard.py", "strata-feed.json", "strata-feed.json.sig", "官方模型哈希.json")]
 
@@ -37,6 +38,19 @@ def native(file):
         raise ValueError("定制CLI声明与源码构建锁不符")
     if not file.is_file() or file.is_symlink() or file.resolve() != file or digest(file) != cfg["sha256"]:
         raise ValueError("必须提供已核验的CTFCode定制CLI；不打包原版或全局CLI")
+    return cfg
+
+
+def launcher(file):
+    file = Path(file).absolute()
+    cfg = json.loads(file.with_name("launcher.json").read_text(encoding="utf-8"))
+    names = {"launcher/Program.cs", "launcher/app.manifest", "launcher/logo.svg", "script/launcher.py"}
+    if cfg.get("format") != 1 or cfg.get("version") != "0.1.0-preview.4" or set(cfg.get("sources", {})) != names:
+        raise ValueError("CTFCode启动器构建声明无效")
+    if file.is_symlink() or file.resolve() != file or digest(file) != cfg["sha256"]:
+        raise ValueError("CTFCode启动器SHA256不匹配")
+    if any(digest(ROOT / name) != cfg["sources"][name] for name in names):
+        raise ValueError("CTFCode启动器源码与构建不匹配，请重新构建")
     return cfg
 
 
@@ -68,6 +82,7 @@ def build(opts):
     control = cache / cfg["control"]["file"]
     cli = Path(opts.cli).absolute()
     release = native(cli)
+    entry = launcher(opts.launcher)
     if control.is_symlink() or digest(control) != cfg["control"]["sha256"]:
         raise ValueError("上游压缩包 SHA256 不符")
     out.mkdir(parents=True)
@@ -84,6 +99,10 @@ def build(opts):
         data = (ROOT / "portable" / name).read_bytes()
         put(name, data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n") if name.endswith(".bat") else data)
     put("README.md", (ROOT / "portable/先读我.md").read_bytes())
+    put("CTFCode.exe", Path(opts.launcher).read_bytes())
+    put("licenses/CTFCode-launcher.json", json.dumps(entry, ensure_ascii=False, indent=2).encode("utf-8"))
+    for name in entry["sources"]:
+        put("licenses/launcher/" + PurePosixPath(name).name, (ROOT / name).read_bytes())
     put("licenses/OpenCode-MIT.txt", (ROOT / "LICENSE").read_bytes())
     put("licenses/CTFCode-OpenCode.patch", (ROOT / "patches/ctfcode-v2.3.0.patch").read_bytes())
     put("licenses/CTFCode-native-build.json", (ROOT / "script/native-lock.json").read_bytes())
@@ -144,7 +163,7 @@ def build(opts):
             put("licenses/sources/" + source["file"], path.read_bytes())
     rows = [{"path": name, "bytes": (out / name).stat().st_size, "sha256": digest(out / name)} for name in sorted(set(files))]
     report = {"format": 1, "contains_models": False, "contains_sessions": False,
-              "source": "CTFCode native OpenCode " + release["version"], "cli": release, "files": rows}
+              "source": "CTFCode native OpenCode " + release["version"], "cli": release, "launcher": entry, "files": rows}
     (out / "bundle-files.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"files": len(rows), "bytes": sum(row["bytes"] for row in rows), "output": str(out)}, ensure_ascii=False))
 
@@ -171,7 +190,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     builder = sub.add_parser("build")
-    for name in ("cache", "engine32", "engine64", "cli", "output"):
+    for name in ("cache", "engine32", "engine64", "cli", "launcher", "output"):
         builder.add_argument("--" + name, required=True)
     packer = sub.add_parser("pack")
     packer.add_argument("--input", required=True)
